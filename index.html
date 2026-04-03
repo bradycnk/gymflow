@@ -18,17 +18,17 @@
           },
           colors: {
             brand: {
-              50: '#eef2ff',
-              100: '#e0e7ff',
-              200: '#c7d2fe',
-              300: '#a5b4fc',
-              400: '#818cf8',
-              500: '#6366f1',
-              600: '#4f46e5',
-              700: '#4338ca',
-              800: '#3730a3',
-              900: '#312e81',
-              950: '#1e1b4b',
+              50: '#fff7ed',
+              100: '#ffedd5',
+              200: '#fed7aa',
+              300: '#fdba74',
+              400: '#fb923c',
+              500: '#f97316',
+              600: '#ea580c',
+              700: '#c2410c',
+              800: '#9a3412',
+              900: '#7c2d12',
+              950: '#431407',
             }
           }
         }
@@ -45,7 +45,9 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes slideIn { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
     @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+    .animate-slideUp { animation: slideUp 0.3s ease-out; }
+    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); } }
     .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
     .animate-slideIn { animation: slideIn 0.3s ease-out; }
     .animate-scaleIn { animation: scaleIn 0.25s ease-out; }
@@ -53,7 +55,9 @@
     .glass-strong { background: rgba(255,255,255,0.06); backdrop-filter: blur(24px); border: 1px solid rgba(255,255,255,0.1); }
     .card-hover { transition: all 0.2s ease; }
     .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
-    .glow-brand { box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
+    .glow-brand { box-shadow: 0 0 20px rgba(249, 115, 22, 0.15); }
+    .gradient-orange { background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #c2410c 100%); }
+    .gradient-orange-fade { background: linear-gradient(180deg, rgba(249, 115, 22, 0.15) 0%, transparent 100%); }
   </style>
 </head>
 <body class="antialiased">

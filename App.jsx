@@ -190,7 +190,7 @@ function GymLogo({ gym, size = 'md', className = '' }) {
     return <img src={gym.logo_url} alt={gym.nombre || 'Gym'} className={`${sizes[size]} ${roundedSizes[size]} object-cover ${className}`} />;
   }
   return (
-    <div className={`${sizes[size]} bg-gradient-to-br from-brand-500 to-purple-600 ${roundedSizes[size]} flex items-center justify-center shadow-lg shadow-brand-500/20 ${className}`}>
+    <div className={`${sizes[size]} bg-gradient-to-br from-brand-500 to-amber-600 ${roundedSizes[size]} flex items-center justify-center shadow-lg shadow-brand-500/20 ${className}`}>
       <svg className={`${iconSizes[size]} text-white`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
     </div>
   );
@@ -278,7 +278,7 @@ function AuthPage() {
       <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center p-4">
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/10 rounded-full blur-[120px]"></div>
-          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-600/10 rounded-full blur-[120px]"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-amber-600/10 rounded-full blur-[120px]"></div>
         </div>
         <div className="animate-scaleIn glass-strong rounded-3xl max-w-md w-full p-8 relative z-10">
           <div className="text-center mb-6">
@@ -304,11 +304,11 @@ function AuthPage() {
     <div className="min-h-screen bg-[#0f0f13] flex items-center justify-center p-4">
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-brand-600/10 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-600/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-amber-600/10 rounded-full blur-[120px]"></div>
       </div>
       <div className="animate-scaleIn glass-strong rounded-3xl max-w-md w-full p-8 relative z-10">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-brand-500 to-purple-600 rounded-2xl mb-4 shadow-lg shadow-brand-500/25">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-brand-500 to-amber-600 rounded-2xl mb-4 shadow-lg shadow-brand-500/25">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">GymFlow</h1>
@@ -354,7 +354,7 @@ function AuthPage() {
               </button>
             </div>
           </div>
-          <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-brand-600 to-purple-600 text-white rounded-xl font-semibold hover:from-brand-500 hover:to-purple-500 disabled:opacity-50 transition flex items-center justify-center gap-2 shadow-lg shadow-brand-600/20 text-sm">
+          <button type="submit" disabled={loading} className="w-full py-3 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl font-semibold hover:from-brand-500 hover:to-amber-500 disabled:opacity-50 transition flex items-center justify-center gap-2 shadow-lg shadow-brand-600/20 text-sm">
             {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
             {loading ? 'Procesando...' : isLogin ? 'Iniciar sesión' : 'Crear cuenta'}
           </button>
@@ -423,7 +423,7 @@ function Sidebar({ currentView, setView, profile, onLogout }) {
 
       <div className="p-3 border-t border-white/5">
         <div className="flex items-center gap-3 px-3 py-2 mb-1">
-          <div className="w-9 h-9 bg-gradient-to-br from-brand-500/30 to-purple-500/30 rounded-xl flex items-center justify-center text-sm font-bold text-brand-300 border border-brand-500/20">
+          <div className="w-9 h-9 bg-gradient-to-br from-brand-500/30 to-amber-500/30 rounded-xl flex items-center justify-center text-sm font-bold text-brand-300 border border-brand-500/20">
             {profile?.nombre?.charAt(0)?.toUpperCase() || '?'}
           </div>
           <div className="flex-1 min-w-0">
@@ -451,6 +451,92 @@ function MobileSidebar({ currentView, setView, profile, onLogout, open, onClose 
     <div className="fixed inset-0 z-50 lg:hidden">
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose}></div>
       <div className="fixed left-0 top-0 bottom-0 w-64 animate-slideIn"><Sidebar currentView={currentView} setView={(v) => { setView(v); onClose(); }} profile={profile} onLogout={onLogout} /></div>
+    </div>
+  );
+}
+
+function BottomNav({ currentView, setView, profile, onLogout, onMore }) {
+  const isAdmin = profile?.role === 'admin';
+  const adminLinks = [
+    { id: 'dashboard', label: 'Inicio', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1' },
+    { id: 'members', label: 'Miembros', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+    { id: 'memberships', label: 'Membresías', icon: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
+    { id: 'attendance', label: 'Asistencia', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+    { id: 'more', label: 'Más', icon: 'M4 6h16M4 12h16M4 18h16' },
+  ];
+  const memberLinks = [
+    { id: 'my-membership', label: 'Membresía', icon: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
+    { id: 'my-attendance', label: 'Asistencia', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+    { id: 'available-plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+    { id: 'more', label: 'Más', icon: 'M4 6h16M4 12h16M4 18h16' },
+  ];
+  const links = isAdmin ? adminLinks : memberLinks;
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#12121a]/95 backdrop-blur-xl border-t border-white/5">
+      <div className="flex items-center justify-around px-2 py-1 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+        {links.map((link) => {
+          const isActive = link.id === 'more' ? false : currentView === link.id;
+          return (
+            <button
+              key={link.id}
+              onClick={() => link.id === 'more' ? onMore() : setView(link.id)}
+              className={`flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-all min-w-[60px] ${
+                isActive
+                  ? 'text-brand-400'
+                  : 'text-gray-500 active:text-gray-300'
+              }`}
+            >
+              <div className={`relative ${isActive ? '' : ''}`}>
+                {isActive && <div className="absolute -inset-1.5 bg-brand-500/15 rounded-lg"></div>}
+                <svg className="w-5 h-5 relative" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isActive ? 2.5 : 1.5} d={link.icon} /></svg>
+              </div>
+              <span className={`text-[10px] font-medium ${isActive ? 'text-brand-400' : ''}`}>{link.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function MobileMoreMenu({ open, onClose, setView, profile, onLogout }) {
+  if (!open) return null;
+  const isAdmin = profile?.role === 'admin';
+  const extraLinks = isAdmin
+    ? [{ id: 'plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+       { id: 'settings', label: 'Configuración', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' }]
+    : [];
+
+  return (
+    <div className="fixed inset-0 z-[60] lg:hidden">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="fixed bottom-0 left-0 right-0 animate-slideUp bg-[#1a1a24] border-t border-white/10 rounded-t-2xl p-4 pb-[max(4.5rem,env(safe-area-inset-bottom))]">
+        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
+        <div className="flex items-center gap-3 px-2 py-3 mb-2">
+          <div className="w-10 h-10 bg-gradient-to-br from-brand-500 to-amber-600 rounded-xl flex items-center justify-center text-sm font-bold text-white">
+            {profile?.nombre?.charAt(0)?.toUpperCase() || '?'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate">{profile?.nombre}</p>
+            <p className="text-xs text-gray-500 truncate">{profile?.email}</p>
+          </div>
+        </div>
+        {extraLinks.map((link) => (
+          <button key={link.id} onClick={() => { setView(link.id); onClose(); }}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-gray-300 hover:bg-white/5 transition">
+            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={link.icon} /></svg>
+            {link.label}
+          </button>
+        ))}
+        <div className="border-t border-white/5 mt-2 pt-2">
+          <button onClick={() => { onLogout(); onClose(); }}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/5 transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -511,7 +597,7 @@ function AdminDashboard() {
         <StatCard label="Total Miembros" value={stats.total} color="bg-blue-600" icon="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
         <StatCard label="Activas" value={stats.activos} color="bg-emerald-600" icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         <StatCard label="Vencidas Hoy" value={stats.vencidosHoy} color="bg-red-600" icon="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        <StatCard label="Ingresos Mes" value={`$${stats.ingresos.toFixed(2)}`} subtext={bcvData?.rate ? formatBs(stats.ingresos, bcvData.rate) : null} color="bg-purple-600" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <StatCard label="Ingresos Mes" value={`$${stats.ingresos.toFixed(2)}`} subtext={bcvData?.rate ? formatBs(stats.ingresos, bcvData.rate) : null} color="bg-brand-600" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </div>
     </div>
   );
@@ -596,7 +682,7 @@ function MembersPage() {
     <div className="animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div><h1 className="text-2xl font-bold text-white">Miembros</h1><p className="text-gray-500 text-sm mt-0.5">{members.length} registrados</p></div>
-        <button onClick={() => { resetForm(); setShowForm(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-purple-600 text-white rounded-xl hover:from-brand-500 hover:to-purple-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+        <button onClick={() => { resetForm(); setShowForm(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           Nuevo Miembro
         </button>
@@ -735,7 +821,7 @@ function PlansPage() {
     <div className="animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div><h1 className="text-2xl font-bold text-white">Planes</h1><p className="text-gray-500 text-sm mt-0.5">Configura tus planes de membresía</p></div>
-        <button onClick={() => { resetForm(); setShowForm(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-purple-600 text-white rounded-xl hover:from-brand-500 hover:to-purple-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+        <button onClick={() => { resetForm(); setShowForm(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           Nuevo Plan
         </button>
@@ -860,7 +946,7 @@ function MembershipsPage() {
     <div className="animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div><h1 className="text-2xl font-bold text-white">Membresías</h1><p className="text-gray-500 text-sm mt-0.5">Gestión y renovación</p></div>
-        <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-purple-600 text-white rounded-xl hover:from-brand-500 hover:to-purple-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+        <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           Asignar / Renovar
         </button>
@@ -1167,7 +1253,7 @@ function MyAttendancePage() {
       <h1 className="text-2xl font-bold text-white mb-6">Mi Asistencia</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <StatCard label="Este mes" value={thisMonth} color="bg-brand-600" icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-        <StatCard label="Total" value={attendance.length} color="bg-purple-600" icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        <StatCard label="Total" value={attendance.length} color="bg-brand-600" icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </div>
       <div className="glass rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-white/5"><h2 className="font-semibold text-white text-sm">Historial</h2></div>
@@ -1331,7 +1417,7 @@ function SettingsPage() {
             {logoPreview ? (
               <img src={logoPreview} alt="Logo" className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-white/10" />
             ) : (
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-brand-500 to-purple-600 rounded-2xl flex items-center justify-center">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-brand-500 to-amber-600 rounded-2xl flex items-center justify-center">
                 <svg className="w-10 h-10 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               </div>
             )}
@@ -1376,7 +1462,7 @@ function SettingsPage() {
             <input type="text" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} className={inputClass} placeholder="Ej: +58 412-1234567" />
           </div>
           <div className="pt-2">
-            <button type="submit" disabled={loading} className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-brand-600 to-purple-600 text-white rounded-xl hover:from-brand-500 hover:to-purple-500 disabled:opacity-50 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+            <button type="submit" disabled={loading} className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 disabled:opacity-50 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
               {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
               {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>
@@ -1417,6 +1503,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const bcv = useBcvRate();
 
   const loadGym = useCallback(async (gymId) => {
@@ -1486,17 +1573,17 @@ export default function App() {
       <div className="flex min-h-screen bg-[#0f0f13]">
         <div className="hidden lg:block"><Sidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} /></div>
         <MobileSidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+        <MobileMoreMenu open={moreMenuOpen} onClose={() => setMoreMenuOpen(false)} setView={setView} profile={profile} onLogout={handleLogout} />
         <div className="flex-1 min-w-0">
-          <header className="lg:hidden bg-[#12121a] border-b border-white/5 px-4 py-3 flex items-center justify-between">
-            <button onClick={() => setMobileMenuOpen(true)} className="p-2 -ml-2 text-gray-400 hover:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+          <header className="lg:hidden bg-[#12121a]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-center sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <GymLogo gym={gym} size="sm" />
               <span className="font-bold text-white text-sm truncate max-w-[180px]">{gym?.nombre || 'GymFlow'}</span>
             </div>
-            <div className="w-8"></div>
           </header>
-          <main className="p-4 sm:p-6 lg:p-8 max-w-7xl">{renderView()}</main>
+          <main className="p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8 max-w-7xl">{renderView()}</main>
         </div>
+        <BottomNav currentView={view} setView={setView} profile={profile} onLogout={handleLogout} onMore={() => setMoreMenuOpen(true)} />
       </div>
     </AppContext.Provider>
   );
