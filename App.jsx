@@ -709,7 +709,7 @@ function MembersPage() {
             {!editing && (
               <div className="sm:col-span-2"><label className="block text-sm font-medium text-gray-400 mb-1.5">Plan (opcional)</label>
                 <select value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })} className={inputClass + " bg-[#0f0f13]"}>
-                  <option value="">Sin plan por ahora</option>{planes.map((p) => <option key={p.id} value={p.id}>{p.nombre} — ${p.precio}{bcvData?.rate ? ` (${formatBs(p.precio, bcvData.rate)})` : ''} ({p.duracion_dias} días)</option>)}
+                  <option value="">Sin plan por ahora</option>{planes.map((p) => { const pf = Number(p.descuento) > 0 ? (Number(p.precio) * (1 - Number(p.descuento) / 100)).toFixed(2) : Number(p.precio).toFixed(2); return <option key={p.id} value={p.id}>{p.nombre} — ${pf}{Number(p.descuento) > 0 ? ` (-${p.descuento}%)` : ''} ({p.duracion_dias} días)</option>; })}
                 </select>
               </div>
             )}
@@ -783,45 +783,75 @@ function PlansPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
-  const [form, setForm] = useState({ nombre: '', duracion_dias: '', precio: '' });
+  const [form, setForm] = useState({ nombre: '', duracion_dias: '', precio: '', categoria: 'individual', descuento: '0', descripcion: '' });
+
+  const CATEGORIAS = [
+    { id: 'inscripcion', label: 'Inscripción', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', color: 'emerald' },
+    { id: 'sesion', label: 'Sesiones', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'blue' },
+    { id: 'individual', label: 'Planes Individuales', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z', color: 'brand' },
+    { id: 'grupal', label: 'Planes Grupales', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', color: 'violet' },
+    { id: 'asesoria', label: 'Asesorías Personalizadas', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z', color: 'amber' },
+  ];
+  const catColors = { inscripcion: 'emerald', sesion: 'blue', individual: 'brand', grupal: 'violet', asesoria: 'amber' };
 
   const loadPlanes = useCallback(async () => {
     if (!profile?.gym_id) return;
     setLoading(true);
-    const { data } = await supabase.from('planes').select('*').eq('gym_id', profile.gym_id).order('duracion_dias');
+    const { data } = await supabase.from('planes').select('*').eq('gym_id', profile.gym_id).order('precio');
     setPlanes(data || []); setLoading(false);
   }, [profile?.gym_id]);
 
   useEffect(() => { loadPlanes(); }, [loadPlanes]);
 
-  function resetForm() { setForm({ nombre: '', duracion_dias: '', precio: '' }); setEditing(null); setShowForm(false); }
+  function resetForm() { setForm({ nombre: '', duracion_dias: '', precio: '', categoria: 'individual', descuento: '0', descripcion: '' }); setEditing(null); setShowForm(false); }
 
   async function handleSave(e) {
     e.preventDefault(); setError('');
     try {
+      const payload = { nombre: form.nombre, duracion_dias: parseInt(form.duracion_dias), precio: parseFloat(form.precio), categoria: form.categoria, descuento: parseFloat(form.descuento || 0), descripcion: form.descripcion.trim() || null };
       if (editing) {
-        const { error } = await supabase.from('planes').update({ nombre: form.nombre, duracion_dias: parseInt(form.duracion_dias), precio: parseFloat(form.precio) }).eq('id', editing.id);
+        const { error } = await supabase.from('planes').update(payload).eq('id', editing.id);
         if (error) throw error; setSuccess('Plan actualizado');
       } else {
-        const { error } = await supabase.from('planes').insert({ nombre: form.nombre, duracion_dias: parseInt(form.duracion_dias), precio: parseFloat(form.precio), gym_id: profile.gym_id });
+        const { error } = await supabase.from('planes').insert({ ...payload, gym_id: profile.gym_id });
         if (error) throw error; setSuccess('Plan creado');
       }
       resetForm(); loadPlanes();
     } catch (err) { setError(err.message); }
   }
 
-  async function handleDelete(plan) {
-    try { const { error } = await supabase.from('planes').update({ activo: false }).eq('id', plan.id); if (error) throw error; setSuccess('Plan desactivado'); setConfirmDelete(null); loadPlanes(); }
-    catch (err) { setError(err.message); }
+  async function handleToggle(plan) {
+    try {
+      const { error } = await supabase.from('planes').update({ activo: !plan.activo }).eq('id', plan.id);
+      if (error) throw error;
+      setSuccess(plan.activo ? 'Plan desactivado' : 'Plan activado');
+      setConfirmDelete(null); loadPlanes();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function handleQuickDiscount(plan, descuento) {
+    try {
+      const { error } = await supabase.from('planes').update({ descuento: parseFloat(descuento) }).eq('id', plan.id);
+      if (error) throw error;
+      setSuccess(`Descuento actualizado: ${descuento}%`);
+      loadPlanes();
+    } catch (err) { setError(err.message); }
   }
 
   if (loading) return <Spinner />;
   const inputClass = "w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 outline-none transition text-sm";
+  const selectClass = "w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 outline-none transition text-sm appearance-none";
+
+  function getPrecioFinal(plan) {
+    const p = Number(plan.precio);
+    const d = Number(plan.descuento || 0);
+    return d > 0 ? p * (1 - d / 100) : p;
+  }
 
   return (
     <div className="animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div><h1 className="text-2xl font-bold text-white">Planes</h1><p className="text-gray-500 text-sm mt-0.5">Configura tus planes de membresía</p></div>
+        <div><h1 className="text-2xl font-bold text-white">Planes</h1><p className="text-gray-500 text-sm mt-0.5">Configura precios, descuentos y categorías</p></div>
         <button onClick={() => { resetForm(); setShowForm(true); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
           Nuevo Plan
@@ -834,11 +864,18 @@ function PlansPage() {
       {showForm && (
         <div className="glass rounded-2xl p-6 mb-6 animate-fadeIn">
           <h2 className="text-lg font-semibold text-white mb-4">{editing ? 'Editar Plan' : 'Nuevo Plan'}</h2>
-          <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Nombre *</label><input type="text" required value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className={inputClass} placeholder="Ej: Mensual" /></div>
-            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Días *</label><input type="number" required min="1" value={form.duracion_dias} onChange={(e) => setForm({ ...form, duracion_dias: e.target.value })} className={inputClass} /></div>
+          <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Nombre *</label><input type="text" required value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} className={inputClass} placeholder="Ej: 1 Mes Full" /></div>
+            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Categoría *</label>
+              <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} className={selectClass}>
+                {CATEGORIAS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+            </div>
+            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Duración (días) *</label><input type="number" required min="1" value={form.duracion_dias} onChange={(e) => setForm({ ...form, duracion_dias: e.target.value })} className={inputClass} /></div>
             <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Precio ($) *</label><input type="number" required min="0" step="0.01" value={form.precio} onChange={(e) => setForm({ ...form, precio: e.target.value })} className={inputClass} /></div>
-            <div className="sm:col-span-3 flex gap-3">
+            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Descuento (%)</label><input type="number" min="0" max="100" step="1" value={form.descuento} onChange={(e) => setForm({ ...form, descuento: e.target.value })} className={inputClass} placeholder="0" /></div>
+            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Descripción</label><input type="text" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} className={inputClass} placeholder="Ej: Acceso completo" /></div>
+            <div className="sm:col-span-2 lg:col-span-3 flex gap-3">
               <button type="submit" className="px-6 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 transition text-sm font-semibold">{editing ? 'Guardar' : 'Crear Plan'}</button>
               <button type="button" onClick={resetForm} className="px-6 py-2.5 border border-white/10 text-gray-400 rounded-xl hover:bg-white/5 transition text-sm">Cancelar</button>
             </div>
@@ -846,25 +883,83 @@ function PlansPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {planes.filter((p) => p.activo).map((plan) => (
-          <div key={plan.id} className="glass rounded-2xl p-5 card-hover">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 bg-brand-600/15 border border-brand-500/20 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></div>
-              <span className="text-2xl font-bold text-white">${Number(plan.precio).toFixed(2)}</span>
-              {bcvData?.rate && <p className="text-xs text-gray-500 mt-0.5">{formatBs(plan.precio, bcvData.rate)}</p>}
+      {/* Plans by category */}
+      {CATEGORIAS.map((cat) => {
+        const catPlans = planes.filter((p) => (p.categoria || 'individual') === cat.id && p.activo);
+        if (catPlans.length === 0) return null;
+        const c = cat.color;
+        return (
+          <div key={cat.id} className="mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${c === 'brand' ? 'bg-brand-600/15 border-brand-500/20' : c === 'emerald' ? 'bg-emerald-600/15 border-emerald-500/20' : c === 'blue' ? 'bg-blue-600/15 border-blue-500/20' : c === 'violet' ? 'bg-violet-600/15 border-violet-500/20' : 'bg-amber-600/15 border-amber-500/20'} border`}>
+                <svg className={`w-4.5 h-4.5 ${c === 'brand' ? 'text-brand-400' : c === 'emerald' ? 'text-emerald-400' : c === 'blue' ? 'text-blue-400' : c === 'violet' ? 'text-violet-400' : 'text-amber-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={cat.icon} /></svg>
+              </div>
+              <h2 className="text-lg font-bold text-white">{cat.label}</h2>
+              <span className="text-xs text-gray-600">{catPlans.length} {catPlans.length === 1 ? 'plan' : 'planes'}</span>
             </div>
-            <h3 className="text-lg font-bold text-white">{plan.nombre}</h3>
-            <p className="text-gray-500 text-sm">{plan.duracion_dias} días de acceso</p>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => { setForm({ nombre: plan.nombre, duracion_dias: plan.duracion_dias.toString(), precio: plan.precio.toString() }); setEditing(plan); setShowForm(true); }} className="flex-1 px-3 py-2.5 text-sm text-brand-400 border border-brand-500/20 rounded-full hover:bg-brand-500/10 transition font-medium">Editar</button>
-              <button onClick={() => setConfirmDelete(plan)} className="px-3 py-2.5 text-sm text-red-400 border border-red-500/20 rounded-full hover:bg-red-500/10 transition">Eliminar</button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {catPlans.map((plan) => {
+                const finalPrice = getPrecioFinal(plan);
+                const hasDiscount = Number(plan.descuento) > 0;
+                return (
+                  <div key={plan.id} className="glass rounded-2xl p-5 card-hover">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-bold text-white truncate">{plan.nombre}</h3>
+                        {plan.descripcion && <p className="text-xs text-gray-500 mt-0.5">{plan.descripcion}</p>}
+                      </div>
+                      {hasDiscount && <span className="ml-2 px-2 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 rounded-lg text-[10px] font-bold shrink-0">-{Number(plan.descuento)}%</span>}
+                    </div>
+                    <div className="flex items-baseline gap-2 mb-1">
+                      <span className="text-xl font-bold text-white">${finalPrice.toFixed(2)}</span>
+                      {hasDiscount && <span className="text-sm text-gray-600 line-through">${Number(plan.precio).toFixed(2)}</span>}
+                    </div>
+                    {bcvData?.rate && <p className="text-[11px] text-gray-500">{formatBs(finalPrice, bcvData.rate)}</p>}
+                    <p className="text-xs text-gray-600 mt-1">{plan.duracion_dias} {plan.duracion_dias === 1 ? 'día' : 'días'}</p>
+
+                    {/* Quick discount */}
+                    <div className="mt-3 flex items-center gap-1.5">
+                      <span className="text-[10px] text-gray-600 uppercase font-medium">Desc:</span>
+                      <input
+                        type="number" min="0" max="100" step="1"
+                        defaultValue={plan.descuento || 0}
+                        onBlur={(e) => { const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0)); if (v !== Number(plan.descuento || 0)) handleQuickDiscount(plan, v); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.target.blur(); } }}
+                        className="w-14 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-white text-xs text-center focus:ring-1 focus:ring-brand-500/50 outline-none"
+                      />
+                      <span className="text-[10px] text-gray-600">%</span>
+                    </div>
+
+                    <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
+                      <button onClick={() => { setForm({ nombre: plan.nombre, duracion_dias: plan.duracion_dias.toString(), precio: plan.precio.toString(), categoria: plan.categoria || 'individual', descuento: (plan.descuento || 0).toString(), descripcion: plan.descripcion || '' }); setEditing(plan); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="flex-1 px-3 py-2 text-xs text-brand-400 border border-brand-500/20 rounded-lg hover:bg-brand-500/10 transition font-medium">Editar</button>
+                      <button onClick={() => setConfirmDelete(plan)} className="px-3 py-2 text-xs text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition">Desactivar</button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        ))}
-        {planes.filter((p) => p.activo).length === 0 && <p className="text-gray-600 col-span-full text-center py-8">No hay planes creados</p>}
-      </div>
-      <ConfirmModal open={!!confirmDelete} title="Desactivar Plan" message={`¿Desactivar "${confirmDelete?.nombre}"?`} onConfirm={() => handleDelete(confirmDelete)} onCancel={() => setConfirmDelete(null)} />
+        );
+      })}
+
+      {/* Inactive plans */}
+      {planes.filter((p) => !p.activo).length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wider mb-3">Planes desactivados</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {planes.filter((p) => !p.activo).map((plan) => (
+              <div key={plan.id} className="glass rounded-2xl p-4 opacity-50">
+                <h3 className="text-sm font-semibold text-gray-400">{plan.nombre}</h3>
+                <p className="text-xs text-gray-600">${Number(plan.precio).toFixed(2)} — {plan.duracion_dias} días</p>
+                <button onClick={() => handleToggle(plan)} className="mt-2 px-3 py-1.5 text-xs text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/10 transition">Reactivar</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {planes.filter((p) => p.activo).length === 0 && <p className="text-gray-600 text-center py-8">No hay planes creados</p>}
+      <ConfirmModal open={!!confirmDelete} title="Desactivar Plan" message={`¿Desactivar "${confirmDelete?.nombre}"? Los miembros con este plan no se verán afectados.`} onConfirm={() => handleToggle(confirmDelete)} onCancel={() => setConfirmDelete(null)} confirmText="Desactivar" />
     </div>
   );
 }
@@ -970,7 +1065,7 @@ function MembershipsPage() {
           <h2 className="text-lg font-semibold text-white mb-4">Asignar o Renovar</h2>
           <form onSubmit={handleFormSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Miembro *</label><select required value={form.member_id} onChange={(e) => setForm({ ...form, member_id: e.target.value })} className={inputClass}><option value="">Seleccionar</option>{members.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}</select></div>
-            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Plan *</label><select required value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })} className={inputClass}><option value="">Seleccionar</option>{planes.map((p) => <option key={p.id} value={p.id}>{p.nombre} — ${p.precio}{bcvData?.rate ? ` (${formatBs(p.precio, bcvData.rate)})` : ''}</option>)}</select></div>
+            <div><label className="block text-sm font-medium text-gray-400 mb-1.5">Plan *</label><select required value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })} className={inputClass}><option value="">Seleccionar</option>{planes.map((p) => { const pf = Number(p.descuento) > 0 ? (Number(p.precio) * (1 - Number(p.descuento) / 100)).toFixed(2) : Number(p.precio).toFixed(2); return <option key={p.id} value={p.id}>{p.nombre} — ${pf}{Number(p.descuento) > 0 ? ` (-${p.descuento}%)` : ''}</option>; })}</select></div>
             <div className="sm:col-span-2 flex gap-3">
               <button type="submit" className="px-6 py-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-500 transition text-sm font-semibold">Asignar</button>
               <button type="button" onClick={() => setShowForm(false)} className="px-6 py-2.5 border border-white/10 text-gray-400 rounded-xl hover:bg-white/5 transition text-sm">Cancelar</button>
@@ -1863,11 +1958,19 @@ function AvailablePlansPage() {
   const [planes, setPlanes] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const CATEGORIAS = [
+    { id: 'inscripcion', label: 'Inscripción', color: 'emerald' },
+    { id: 'sesion', label: 'Sesiones', color: 'blue' },
+    { id: 'individual', label: 'Planes Individuales', color: 'brand' },
+    { id: 'grupal', label: 'Planes Grupales', color: 'violet' },
+    { id: 'asesoria', label: 'Asesorías Personalizadas', color: 'amber' },
+  ];
+
   useEffect(() => {
     async function load() {
       if (!profile?.gym_id) return;
       setLoading(true);
-      const { data } = await supabase.from('planes').select('*').eq('gym_id', profile.gym_id).eq('activo', true).order('duracion_dias');
+      const { data } = await supabase.from('planes').select('*').eq('gym_id', profile.gym_id).eq('activo', true).order('precio');
       setPlanes(data || []); setLoading(false);
     }
     load();
@@ -1875,22 +1978,48 @@ function AvailablePlansPage() {
 
   if (loading) return <Spinner />;
 
+  function getPrecioFinal(plan) {
+    const p = Number(plan.precio);
+    const d = Number(plan.descuento || 0);
+    return d > 0 ? p * (1 - d / 100) : p;
+  }
+
   return (
     <div className="animate-fadeIn">
       <h1 className="text-2xl font-bold text-white mb-6">Planes Disponibles</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {planes.map((plan, i) => (
-          <div key={plan.id} className={`glass rounded-2xl p-6 card-hover ${i === 1 ? 'border-brand-500/30 glow-brand' : ''}`}>
-            {i === 1 && <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-3">Más popular</p>}
-            <h3 className="text-lg font-bold text-white">{plan.nombre}</h3>
-            <p className="text-gray-500 text-sm mb-4">{plan.duracion_dias} días de acceso</p>
-            <p className="text-3xl font-extrabold text-white mb-1">${Number(plan.precio).toFixed(2)}</p>
-            {bcvData?.rate && <p className="text-sm text-gray-400 mb-1">{formatBs(plan.precio, bcvData.rate)}</p>}
-            <p className="text-xs text-gray-500">Contacta al administrador para suscribirte</p>
+
+      {CATEGORIAS.map((cat) => {
+        const catPlans = planes.filter((p) => (p.categoria || 'individual') === cat.id);
+        if (catPlans.length === 0) return null;
+        return (
+          <div key={cat.id} className="mb-8">
+            <h2 className={`text-sm font-bold uppercase tracking-wider mb-4 ${cat.color === 'brand' ? 'text-brand-400' : cat.color === 'emerald' ? 'text-emerald-400' : cat.color === 'blue' ? 'text-blue-400' : cat.color === 'violet' ? 'text-violet-400' : 'text-amber-400'}`}>{cat.label}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {catPlans.map((plan) => {
+                const finalPrice = getPrecioFinal(plan);
+                const hasDiscount = Number(plan.descuento) > 0;
+                return (
+                  <div key={plan.id} className="glass rounded-2xl p-6 card-hover relative overflow-hidden">
+                    {hasDiscount && (
+                      <div className="absolute top-3 right-3 px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-bold">-{Number(plan.descuento)}%</div>
+                    )}
+                    <h3 className="text-lg font-bold text-white">{plan.nombre}</h3>
+                    {plan.descripcion && <p className="text-gray-500 text-sm mt-0.5">{plan.descripcion}</p>}
+                    <p className="text-xs text-gray-600 mt-1">{plan.duracion_dias} {plan.duracion_dias === 1 ? 'día' : 'días'} de acceso</p>
+                    <div className="mt-4 flex items-baseline gap-2">
+                      <p className="text-3xl font-extrabold text-white">${finalPrice.toFixed(2)}</p>
+                      {hasDiscount && <p className="text-sm text-gray-600 line-through">${Number(plan.precio).toFixed(2)}</p>}
+                    </div>
+                    {bcvData?.rate && <p className="text-sm text-gray-400 mt-0.5">{formatBs(finalPrice, bcvData.rate)}</p>}
+                    <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-white/5">Contacta al administrador para suscribirte</p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ))}
-        {planes.length === 0 && <p className="text-gray-600 col-span-full text-center py-8">No hay planes disponibles</p>}
-      </div>
+        );
+      })}
+      {planes.length === 0 && <p className="text-gray-600 text-center py-8">No hay planes disponibles</p>}
     </div>
   );
 }

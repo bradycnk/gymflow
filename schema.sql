@@ -50,6 +50,9 @@ CREATE TABLE public.planes (
   precio NUMERIC(10,2) NOT NULL CHECK (precio >= 0),
   gym_id UUID NOT NULL REFERENCES public.gyms(id) ON DELETE CASCADE,
   activo BOOLEAN DEFAULT true,
+  categoria TEXT DEFAULT 'individual' CHECK (categoria IN ('inscripcion', 'sesion', 'individual', 'grupal', 'asesoria')),
+  descuento NUMERIC(5,2) DEFAULT 0 CHECK (descuento >= 0 AND descuento <= 100),
+  descripcion TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -182,10 +185,22 @@ BEGIN
     RETURNING id INTO NEW.gym_id;
 
     -- Insertar planes por defecto
-    INSERT INTO public.planes (nombre, duracion_dias, precio, gym_id) VALUES
-      ('Mensual', 30, 29.99, NEW.gym_id),
-      ('Trimestral', 90, 74.99, NEW.gym_id),
-      ('Anual', 365, 249.99, NEW.gym_id);
+    INSERT INTO public.planes (nombre, duracion_dias, precio, gym_id, categoria, descripcion) VALUES
+      ('Inscripción', 1, 10.00, NEW.gym_id, 'inscripcion', 'Pago único de inscripción'),
+      ('1 Día', 1, 8.00, NEW.gym_id, 'sesion', 'Sesión de un día'),
+      ('1 Semana', 7, 20.00, NEW.gym_id, 'sesion', 'Acceso por 1 semana'),
+      ('2 Semanas', 14, 30.00, NEW.gym_id, 'sesion', 'Acceso por 2 semanas'),
+      ('1 Mes Full', 30, 49.00, NEW.gym_id, 'individual', 'Acceso completo todo el día'),
+      ('1 Mes Happy Hour', 30, 35.00, NEW.gym_id, 'individual', 'Acceso en horario happy hour'),
+      ('1 Mes 10 Sesiones', 30, 35.00, NEW.gym_id, 'individual', 'Acceso limitado a 10 sesiones'),
+      ('2 Meses', 60, 90.00, NEW.gym_id, 'individual', 'Acceso completo por 2 meses'),
+      ('3 Meses', 90, 128.00, NEW.gym_id, 'individual', 'Acceso completo por 3 meses'),
+      ('6 Meses', 180, 200.00, NEW.gym_id, 'individual', 'Acceso completo por 6 meses'),
+      ('1 Año', 365, 350.00, NEW.gym_id, 'individual', 'Acceso completo por 1 año'),
+      ('Emparejados', 30, 90.00, NEW.gym_id, 'grupal', 'Plan para 2 personas'),
+      ('Familiar 3 Personas', 30, 135.00, NEW.gym_id, 'grupal', 'Plan para 3 personas'),
+      ('Familiar 5 Personas', 30, 210.00, NEW.gym_id, 'grupal', 'Plan para 5 personas'),
+      ('Instructor Personalizado', 30, 40.00, NEW.gym_id, 'asesoria', 'Asesoría con instructor personal');
   END IF;
   RETURN NEW;
 END;
