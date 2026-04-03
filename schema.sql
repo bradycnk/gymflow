@@ -30,6 +30,15 @@ CREATE TABLE public.profiles (
   email TEXT,
   fecha_ingreso DATE DEFAULT CURRENT_DATE,
   gym_id UUID REFERENCES public.gyms(id) ON DELETE SET NULL,
+  foto_url TEXT,
+  fecha_nacimiento DATE,
+  sexo TEXT CHECK (sexo IN ('masculino', 'femenino')),
+  altura_cm NUMERIC(5,1),
+  peso_kg NUMERIC(5,1),
+  nivel_entrenamiento TEXT CHECK (nivel_entrenamiento IN ('principiante', 'intermedio', 'avanzado')),
+  objetivo_principal TEXT CHECK (objetivo_principal IN ('hipertrofia', 'fuerza', 'perdida_grasa', 'recomposicion')),
+  frecuencia_dias INTEGER CHECK (frecuencia_dias BETWEEN 1 AND 7),
+  duracion_minutos INTEGER CHECK (duracion_minutos BETWEEN 15 AND 180),
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

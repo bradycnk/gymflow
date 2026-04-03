@@ -391,6 +391,7 @@ function Sidebar({ currentView, setView, profile, onLogout }) {
     { id: 'my-membership', label: 'Mi Membresía', icon: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
     { id: 'my-attendance', label: 'Mi Asistencia', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
     { id: 'available-plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+    { id: 'my-profile', label: 'Mi Perfil', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   ];
   const links = isAdmin ? adminLinks : memberLinks;
 
@@ -467,7 +468,7 @@ function BottomNav({ currentView, setView, profile, onLogout, onMore }) {
   const memberLinks = [
     { id: 'my-membership', label: 'Membresía', icon: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
     { id: 'my-attendance', label: 'Asistencia', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
-    { id: 'available-plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+    { id: 'my-profile', label: 'Mi Perfil', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
     { id: 'more', label: 'Más', icon: 'M4 6h16M4 12h16M4 18h16' },
   ];
   const links = isAdmin ? adminLinks : memberLinks;
@@ -506,7 +507,7 @@ function MobileMoreMenu({ open, onClose, setView, profile, onLogout }) {
   const extraLinks = isAdmin
     ? [{ id: 'plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
        { id: 'settings', label: 'Configuración', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' }]
-    : [];
+    : [{ id: 'available-plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' }];
 
   return (
     <div className="fixed inset-0 z-[60] lg:hidden">
@@ -1146,10 +1147,503 @@ function AttendancePage() {
 }
 
 // ============================================================
+// HELPERS: CÁLCULOS FITNESS
+// ============================================================
+
+function calcAge(fechaNac) {
+  if (!fechaNac) return null;
+  const birth = new Date(fechaNac);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
+
+function calcBMI(pesoKg, alturaCm) {
+  if (!pesoKg || !alturaCm) return null;
+  return pesoKg / ((alturaCm / 100) ** 2);
+}
+
+function calcBodyFat(bmi, age, sexo) {
+  if (!bmi || !age || !sexo) return null;
+  // Fórmula Deurenberg
+  return sexo === 'masculino'
+    ? (1.20 * bmi + 0.23 * age - 16.2)
+    : (1.20 * bmi + 0.23 * age - 5.4);
+}
+
+function getTrainingPlan(profile) {
+  const { nivel_entrenamiento, objetivo_principal, frecuencia_dias, duracion_minutos } = profile;
+  if (!nivel_entrenamiento || !objetivo_principal || !frecuencia_dias) return null;
+
+  const objetivoLabels = { hipertrofia: 'Hipertrofia', fuerza: 'Fuerza', perdida_grasa: 'Pérdida de grasa', recomposicion: 'Recomposición corporal' };
+  const nivelLabels = { principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado' };
+
+  // Distribución de días según frecuencia y objetivo
+  const splits = {
+    hipertrofia: {
+      2: ['Tren superior', 'Tren inferior'],
+      3: ['Push (pecho/hombro/tríceps)', 'Pull (espalda/bíceps)', 'Piernas'],
+      4: ['Pecho + Tríceps', 'Espalda + Bíceps', 'Hombros + Core', 'Piernas'],
+      5: ['Pecho', 'Espalda', 'Hombros + Trapecios', 'Piernas', 'Brazos + Core'],
+      6: ['Push', 'Pull', 'Piernas', 'Push', 'Pull', 'Piernas'],
+    },
+    fuerza: {
+      2: ['Sentadilla + Press banca', 'Peso muerto + Press militar'],
+      3: ['Sentadilla + Accesorios', 'Press banca + Accesorios', 'Peso muerto + Press militar'],
+      4: ['Sentadilla', 'Press banca', 'Peso muerto', 'Press militar + Accesorios'],
+      5: ['Sentadilla pesada', 'Press banca pesado', 'Peso muerto pesado', 'Sentadilla volumen', 'Press banca volumen'],
+      6: ['Sentadilla pesada', 'Press banca pesado', 'Peso muerto pesado', 'Sentadilla volumen', 'Press banca volumen', 'Accesorios'],
+    },
+    perdida_grasa: {
+      2: ['Full body + HIIT', 'Full body + Cardio'],
+      3: ['Full body + HIIT', 'Tren superior + Cardio', 'Tren inferior + HIIT'],
+      4: ['Tren superior + HIIT', 'Tren inferior + Cardio', 'Full body circuito', 'Cardio + Core'],
+      5: ['Push + HIIT', 'Pull + Cardio', 'Piernas + HIIT', 'Full body circuito', 'Cardio activo'],
+      6: ['Push + HIIT', 'Pull + Cardio', 'Piernas + HIIT', 'Push + Cardio', 'Pull + HIIT', 'Piernas + Cardio'],
+    },
+    recomposicion: {
+      2: ['Fuerza tren superior', 'Fuerza tren inferior'],
+      3: ['Push + Cardio moderado', 'Pull + Core', 'Piernas + HIIT'],
+      4: ['Push pesado', 'Pull pesado', 'Piernas pesado', 'Full body + Cardio'],
+      5: ['Push pesado', 'Pull pesado', 'Piernas pesado', 'Tren superior volumen', 'Tren inferior + HIIT'],
+      6: ['Push pesado', 'Pull pesado', 'Piernas pesado', 'Push volumen', 'Pull volumen', 'Piernas + HIIT'],
+    },
+  };
+
+  const freq = Math.max(2, Math.min(6, frecuencia_dias));
+  const days = (splits[objetivo_principal] || splits.hipertrofia)[freq] || [];
+
+  // Tips según objetivo y nivel
+  const tips = [];
+  if (objetivo_principal === 'hipertrofia') {
+    tips.push('Enfócate en la conexión mente-músculo y contracción controlada');
+    tips.push('Series de 8-12 repeticiones con descansos de 60-90 segundos');
+    if (nivel_entrenamiento === 'principiante') tips.push('Prioriza aprender la técnica correcta antes de subir peso');
+    if (nivel_entrenamiento === 'avanzado') tips.push('Incluye técnicas de intensidad: drop sets, superseries, rest-pause');
+  } else if (objetivo_principal === 'fuerza') {
+    tips.push('Series de 3-6 repeticiones con descansos de 3-5 minutos');
+    tips.push('Progresión lineal: aumenta peso cada semana o cada dos semanas');
+    if (nivel_entrenamiento === 'principiante') tips.push('Empieza con pesos moderados y perfecciona la técnica');
+  } else if (objetivo_principal === 'perdida_grasa') {
+    tips.push('Mantén la intensidad alta para maximizar el gasto calórico');
+    tips.push('Descansos cortos (30-60s) entre series para mantener la frecuencia cardíaca');
+    tips.push('El déficit calórico es clave — combina con buena alimentación');
+  } else if (objetivo_principal === 'recomposicion') {
+    tips.push('Entrena pesado para mantener masa muscular mientras pierdes grasa');
+    tips.push('Prioriza proteína: 1.6-2.2g por kg de peso corporal');
+    tips.push('Mantén un déficit calórico moderado, no agresivo');
+  }
+
+  if (duracion_minutos && duracion_minutos < 45) tips.push('Con sesiones cortas, prioriza ejercicios compuestos multiarticulares');
+  if (duracion_minutos && duracion_minutos >= 90) tips.push('Sesiones largas: incluye calentamiento completo y movilidad al final');
+
+  return {
+    objetivo: objetivoLabels[objetivo_principal],
+    nivel: nivelLabels[nivel_entrenamiento],
+    dias: days,
+    tips,
+    frecuencia: frecuencia_dias,
+    duracion: duracion_minutos,
+  };
+}
+
+// ============================================================
+// MEMBER: CONFIGURACIÓN PERSONAL
+// ============================================================
+
+function MemberSettingsPage() {
+  const { profile, reloadProfile } = useApp();
+  const [tab, setTab] = useState('personal');
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [photoPreview, setPhotoPreview] = useState(profile?.foto_url || null);
+
+  const [personal, setPersonal] = useState({
+    telefono: profile?.telefono || '',
+  });
+
+  const [training, setTraining] = useState({
+    fecha_nacimiento: profile?.fecha_nacimiento || '',
+    sexo: profile?.sexo || '',
+    altura_cm: profile?.altura_cm || '',
+    peso_kg: profile?.peso_kg || '',
+  });
+
+  const [goals, setGoals] = useState({
+    nivel_entrenamiento: profile?.nivel_entrenamiento || '',
+    objetivo_principal: profile?.objetivo_principal || '',
+    frecuencia_dias: profile?.frecuencia_dias || '',
+    duracion_minutos: profile?.duracion_minutos || '',
+  });
+
+  useEffect(() => {
+    setPersonal({ telefono: profile?.telefono || '' });
+    setTraining({
+      fecha_nacimiento: profile?.fecha_nacimiento || '',
+      sexo: profile?.sexo || '',
+      altura_cm: profile?.altura_cm || '',
+      peso_kg: profile?.peso_kg || '',
+    });
+    setGoals({
+      nivel_entrenamiento: profile?.nivel_entrenamiento || '',
+      objetivo_principal: profile?.objetivo_principal || '',
+      frecuencia_dias: profile?.frecuencia_dias || '',
+      duracion_minutos: profile?.duracion_minutos || '',
+    });
+    setPhotoPreview(profile?.foto_url || null);
+  }, [profile]);
+
+  async function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setError('La imagen no debe superar 2MB.'); return; }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { setError('Formato no soportado. Usa JPG, PNG o WebP.'); return; }
+
+    setUploading(true); setError('');
+    try {
+      const ext = file.name.split('.').pop();
+      const filePath = `${profile.id}/avatar.${ext}`;
+      await supabase.storage.from('profile-photos').remove([filePath]);
+      const { error: uploadError } = await supabase.storage.from('profile-photos').upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+      const fotoUrl = publicUrl + '?t=' + Date.now();
+      const { error: updateError } = await supabase.from('profiles').update({ foto_url: fotoUrl }).eq('id', profile.id);
+      if (updateError) throw updateError;
+      setPhotoPreview(fotoUrl);
+      await reloadProfile();
+      setSuccess('Foto actualizada');
+    } catch (err) { setError(err.message); } finally { setUploading(false); }
+  }
+
+  async function handleRemovePhoto() {
+    setUploading(true); setError('');
+    try {
+      const { data: files } = await supabase.storage.from('profile-photos').list(profile.id);
+      if (files?.length) await supabase.storage.from('profile-photos').remove(files.map(f => `${profile.id}/${f.name}`));
+      const { error } = await supabase.from('profiles').update({ foto_url: null }).eq('id', profile.id);
+      if (error) throw error;
+      setPhotoPreview(null);
+      await reloadProfile();
+      setSuccess('Foto eliminada');
+    } catch (err) { setError(err.message); } finally { setUploading(false); }
+  }
+
+  async function handleSavePersonal(e) {
+    e.preventDefault(); setError(''); setSuccess('');
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('profiles').update({
+        telefono: personal.telefono.trim() || null,
+      }).eq('id', profile.id);
+      if (error) throw error;
+      await reloadProfile();
+      setSuccess('Datos personales guardados');
+    } catch (err) { setError(err.message); } finally { setLoading(false); }
+  }
+
+  async function handleSaveTraining(e) {
+    e.preventDefault(); setError(''); setSuccess('');
+    if (!training.fecha_nacimiento) { setError('La fecha de nacimiento es obligatoria.'); return; }
+    if (!training.sexo) { setError('Selecciona tu sexo.'); return; }
+    if (!training.altura_cm || training.altura_cm < 100 || training.altura_cm > 250) { setError('Altura debe estar entre 100 y 250 cm.'); return; }
+    if (!training.peso_kg || training.peso_kg < 30 || training.peso_kg > 300) { setError('Peso debe estar entre 30 y 300 kg.'); return; }
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('profiles').update({
+        fecha_nacimiento: training.fecha_nacimiento,
+        sexo: training.sexo,
+        altura_cm: parseFloat(training.altura_cm),
+        peso_kg: parseFloat(training.peso_kg),
+      }).eq('id', profile.id);
+      if (error) throw error;
+      await reloadProfile();
+      setSuccess('Configuración de entrenamiento guardada');
+    } catch (err) { setError(err.message); } finally { setLoading(false); }
+  }
+
+  async function handleSaveGoals(e) {
+    e.preventDefault(); setError(''); setSuccess('');
+    if (!goals.nivel_entrenamiento) { setError('Selecciona tu nivel de entrenamiento.'); return; }
+    if (!goals.objetivo_principal) { setError('Selecciona tu objetivo principal.'); return; }
+    if (!goals.frecuencia_dias) { setError('Indica cuántos días puedes entrenar.'); return; }
+    if (!goals.duracion_minutos) { setError('Indica la duración de tus sesiones.'); return; }
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('profiles').update({
+        nivel_entrenamiento: goals.nivel_entrenamiento,
+        objetivo_principal: goals.objetivo_principal,
+        frecuencia_dias: parseInt(goals.frecuencia_dias),
+        duracion_minutos: parseInt(goals.duracion_minutos),
+      }).eq('id', profile.id);
+      if (error) throw error;
+      await reloadProfile();
+      setSuccess('Objetivos guardados');
+    } catch (err) { setError(err.message); } finally { setLoading(false); }
+  }
+
+  const age = calcAge(training.fecha_nacimiento);
+  const bmi = calcBMI(parseFloat(training.peso_kg), parseFloat(training.altura_cm));
+  const bodyFat = calcBodyFat(bmi, age, training.sexo);
+
+  const inputClass = "w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 outline-none transition text-sm";
+  const selectClass = "w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 outline-none transition text-sm appearance-none";
+
+  const tabs = [
+    { id: 'personal', label: 'Personal', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+    { id: 'training', label: 'Cuerpo', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+    { id: 'goals', label: 'Objetivos', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+  ];
+
+  return (
+    <div className="animate-fadeIn max-w-2xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Mi Perfil</h1>
+        <p className="text-gray-500 text-sm mt-1">Configura tus datos personales y de entrenamiento</p>
+      </div>
+
+      <ErrorMsg message={error} onClose={() => setError('')} />
+      <SuccessMsg message={success} onClose={() => setSuccess('')} />
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-white/[0.03] rounded-xl p-1 border border-white/5">
+        {tabs.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              tab === t.id ? 'bg-brand-600/20 text-brand-400 border border-brand-500/20' : 'text-gray-500 hover:text-gray-300 border border-transparent'
+            }`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={t.icon} /></svg>
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* TAB: Personal */}
+      {tab === 'personal' && (
+        <div>
+          {/* Photo */}
+          <div className="glass rounded-2xl p-4 sm:p-6 mb-6">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Foto de Perfil</h2>
+            <div className="flex items-center gap-4 sm:gap-6">
+              <div className="relative group">
+                {photoPreview ? (
+                  <img src={photoPreview} alt="Foto" className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-white/10" />
+                ) : (
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-brand-500/30 to-amber-500/30 rounded-2xl flex items-center justify-center border border-brand-500/20">
+                    <span className="text-2xl font-bold text-brand-300">{profile?.nombre?.charAt(0)?.toUpperCase() || '?'}</span>
+                  </div>
+                )}
+                {uploading && (
+                  <div className="absolute inset-0 bg-black/60 rounded-2xl flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-gray-400 mb-3">JPG, PNG o WebP. Máximo 2MB.</p>
+                <div className="flex gap-2">
+                  <label className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600/15 text-brand-400 border border-brand-500/20 rounded-xl hover:bg-brand-600/25 transition text-sm font-medium cursor-pointer">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    {photoPreview ? 'Cambiar' : 'Subir foto'}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} className="hidden" disabled={uploading} />
+                  </label>
+                  {photoPreview && (
+                    <button onClick={handleRemovePhoto} disabled={uploading} className="px-4 py-2 text-red-400 border border-red-500/20 rounded-xl hover:bg-red-500/10 transition text-sm font-medium">Eliminar</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Phone */}
+          <div className="glass rounded-2xl p-4 sm:p-6">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Datos de Contacto</h2>
+            <form onSubmit={handleSavePersonal} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Nombre</label>
+                <input type="text" value={profile?.nombre || ''} disabled className={`${inputClass} opacity-50 cursor-not-allowed`} />
+                <p className="text-xs text-gray-600 mt-1">Contacta al administrador para cambiar tu nombre</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Email</label>
+                <input type="text" value={profile?.email || ''} disabled className={`${inputClass} opacity-50 cursor-not-allowed`} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Teléfono</label>
+                <input type="text" value={personal.telefono} onChange={(e) => setPersonal({ ...personal, telefono: e.target.value })} className={inputClass} placeholder="Ej: +58 412-1234567" />
+              </div>
+              <div className="pt-2">
+                <button type="submit" disabled={loading} className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 disabled:opacity-50 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+                  {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Training Config */}
+      {tab === 'training' && (
+        <div>
+          <div className="glass rounded-2xl p-4 sm:p-6 mb-6">
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Datos Corporales</h2>
+            <form onSubmit={handleSaveTraining} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Fecha de Nacimiento *</label>
+                  <input type="date" value={training.fecha_nacimiento} onChange={(e) => setTraining({ ...training, fecha_nacimiento: e.target.value })} className={inputClass} max={new Date().toISOString().split('T')[0]} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Sexo *</label>
+                  <select value={training.sexo} onChange={(e) => setTraining({ ...training, sexo: e.target.value })} className={selectClass}>
+                    <option value="">Seleccionar...</option>
+                    <option value="masculino">Masculino</option>
+                    <option value="femenino">Femenino</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Altura (cm) *</label>
+                  <input type="number" step="0.1" min="100" max="250" value={training.altura_cm} onChange={(e) => setTraining({ ...training, altura_cm: e.target.value })} className={inputClass} placeholder="Ej: 175" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1.5">Peso (kg) *</label>
+                  <input type="number" step="0.1" min="30" max="300" value={training.peso_kg} onChange={(e) => setTraining({ ...training, peso_kg: e.target.value })} className={inputClass} placeholder="Ej: 75" />
+                </div>
+              </div>
+              <div className="pt-2">
+                <button type="submit" disabled={loading} className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 disabled:opacity-50 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+                  {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
+                  {loading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Calculated metrics */}
+          {(age || bmi) && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {age && (
+                <div className="glass rounded-2xl p-4 text-center">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Edad</p>
+                  <p className="text-2xl font-bold text-white mt-1">{age}</p>
+                  <p className="text-xs text-gray-600">años</p>
+                </div>
+              )}
+              {bmi && (
+                <div className="glass rounded-2xl p-4 text-center">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">IMC</p>
+                  <p className={`text-2xl font-bold mt-1 ${bmi < 18.5 ? 'text-blue-400' : bmi < 25 ? 'text-emerald-400' : bmi < 30 ? 'text-amber-400' : 'text-red-400'}`}>{bmi.toFixed(1)}</p>
+                  <p className="text-xs text-gray-600">{bmi < 18.5 ? 'Bajo peso' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Sobrepeso' : 'Obesidad'}</p>
+                </div>
+              )}
+              {bodyFat && bodyFat > 0 && (
+                <div className="glass rounded-2xl p-4 text-center">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">% Grasa</p>
+                  <p className="text-2xl font-bold text-brand-400 mt-1">{bodyFat.toFixed(1)}%</p>
+                  <p className="text-xs text-gray-600">corporal</p>
+                </div>
+              )}
+              {training.peso_kg && training.altura_cm && (
+                <div className="glass rounded-2xl p-4 text-center">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">Masa magra</p>
+                  <p className="text-2xl font-bold text-cyan-400 mt-1">{bodyFat && bodyFat > 0 ? (parseFloat(training.peso_kg) * (1 - bodyFat / 100)).toFixed(1) : '—'}</p>
+                  <p className="text-xs text-gray-600">kg estimados</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: Goals */}
+      {tab === 'goals' && (
+        <div className="glass rounded-2xl p-4 sm:p-6">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Nivel y Objetivos</h2>
+          <form onSubmit={handleSaveGoals} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Nivel de Entrenamiento *</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: 'principiante', label: 'Principiante', desc: '0-1 año' },
+                  { value: 'intermedio', label: 'Intermedio', desc: '1-3 años' },
+                  { value: 'avanzado', label: 'Avanzado', desc: '3+ años' },
+                ].map((opt) => (
+                  <button key={opt.value} type="button" onClick={() => setGoals({ ...goals, nivel_entrenamiento: opt.value })}
+                    className={`p-3 rounded-xl border text-center transition-all ${
+                      goals.nivel_entrenamiento === opt.value
+                        ? 'bg-brand-600/20 border-brand-500/30 text-brand-400'
+                        : 'bg-white/[0.03] border-white/5 text-gray-400 hover:border-white/10'
+                    }`}>
+                    <p className="text-sm font-semibold">{opt.label}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Objetivo Principal *</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'hipertrofia', label: 'Hipertrofia', icon: '💪', desc: 'Ganar masa muscular' },
+                  { value: 'fuerza', label: 'Fuerza', icon: '🏋️', desc: 'Aumentar fuerza máxima' },
+                  { value: 'perdida_grasa', label: 'Pérdida de grasa', icon: '🔥', desc: 'Reducir grasa corporal' },
+                  { value: 'recomposicion', label: 'Recomposición', icon: '⚡', desc: 'Ganar músculo y perder grasa' },
+                ].map((opt) => (
+                  <button key={opt.value} type="button" onClick={() => setGoals({ ...goals, objetivo_principal: opt.value })}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      goals.objetivo_principal === opt.value
+                        ? 'bg-brand-600/20 border-brand-500/30 text-brand-400'
+                        : 'bg-white/[0.03] border-white/5 text-gray-400 hover:border-white/10'
+                    }`}>
+                    <p className="text-lg mb-1">{opt.icon}</p>
+                    <p className="text-sm font-semibold">{opt.label}</p>
+                    <p className="text-xs text-gray-600 mt-0.5">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Frecuencia (días/semana) *</label>
+                <select value={goals.frecuencia_dias} onChange={(e) => setGoals({ ...goals, frecuencia_dias: e.target.value })} className={selectClass}>
+                  <option value="">Seleccionar...</option>
+                  {[1, 2, 3, 4, 5, 6, 7].map((d) => <option key={d} value={d}>{d} {d === 1 ? 'día' : 'días'}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1.5">Duración por sesión *</label>
+                <select value={goals.duracion_minutos} onChange={(e) => setGoals({ ...goals, duracion_minutos: e.target.value })} className={selectClass}>
+                  <option value="">Seleccionar...</option>
+                  {[30, 45, 60, 75, 90, 120].map((m) => <option key={m} value={m}>{m} minutos</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button type="submit" disabled={loading} className="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 disabled:opacity-50 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+                {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
+                {loading ? 'Guardando...' : 'Guardar objetivos'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // MEMBER: MI MEMBRESÍA
 // ============================================================
 
-function MyMembershipPage() {
+function MyMembershipPage({ onNavigate }) {
   const { profile, bcv: bcvData } = useApp();
   const [membership, setMembership] = useState(null);
   const [history, setHistory] = useState([]);
@@ -1171,9 +1665,97 @@ function MyMembershipPage() {
   if (loading) return <Spinner />;
   const daysLeft = membership ? getDaysRemaining(membership.fecha_fin) : 0;
 
+  // Fitness calculations
+  const age = calcAge(profile.fecha_nacimiento);
+  const bmi = calcBMI(profile.peso_kg, profile.altura_cm);
+  const bodyFat = calcBodyFat(bmi, age, profile.sexo);
+  const plan = getTrainingPlan(profile);
+  const hasProfile = profile.fecha_nacimiento && profile.sexo && profile.altura_cm && profile.peso_kg;
+  const hasGoals = profile.nivel_entrenamiento && profile.objetivo_principal && profile.frecuencia_dias;
+
   return (
     <div className="animate-fadeIn">
       <h1 className="text-2xl font-bold text-white mb-6">Mi Membresía</h1>
+
+      {/* Fitness Dashboard */}
+      {hasProfile && hasGoals ? (
+        <div className="mb-6 space-y-4">
+          {/* Metrics cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="glass rounded-2xl p-4 card-hover">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Edad</p>
+              <p className="text-xl font-bold text-white mt-1">{age} <span className="text-xs text-gray-500 font-normal">años</span></p>
+            </div>
+            <div className="glass rounded-2xl p-4 card-hover">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">IMC</p>
+              <p className={`text-xl font-bold mt-1 ${bmi < 18.5 ? 'text-blue-400' : bmi < 25 ? 'text-emerald-400' : bmi < 30 ? 'text-amber-400' : 'text-red-400'}`}>{bmi?.toFixed(1)}</p>
+              <p className="text-[10px] text-gray-600">{bmi < 18.5 ? 'Bajo peso' : bmi < 25 ? 'Normal' : bmi < 30 ? 'Sobrepeso' : 'Obesidad'}</p>
+            </div>
+            {bodyFat && bodyFat > 0 && (
+              <div className="glass rounded-2xl p-4 card-hover">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">% Grasa</p>
+                <p className="text-xl font-bold text-brand-400 mt-1">{bodyFat.toFixed(1)}%</p>
+                <p className="text-[10px] text-gray-600">corporal</p>
+              </div>
+            )}
+            {bodyFat && bodyFat > 0 && (
+              <div className="glass rounded-2xl p-4 card-hover">
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Masa magra</p>
+                <p className="text-xl font-bold text-cyan-400 mt-1">{(Number(profile.peso_kg) * (1 - bodyFat / 100)).toFixed(1)} <span className="text-xs text-gray-500 font-normal">kg</span></p>
+              </div>
+            )}
+          </div>
+
+          {/* Training Plan */}
+          {plan && (
+            <div className="glass rounded-2xl p-4 sm:p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-bold text-white">Plan de Entrenamiento</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">{plan.nivel} — {plan.objetivo} — {plan.frecuencia} días/sem — {plan.duracion} min</p>
+                </div>
+                <button onClick={() => onNavigate('my-profile')} className="text-xs text-brand-400 hover:text-brand-300 transition">Editar</button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+                {plan.dias.map((day, i) => (
+                  <div key={i} className="bg-white/[0.03] border border-white/5 rounded-xl p-3 text-center">
+                    <p className="text-[10px] text-gray-500 uppercase font-semibold">Día {i + 1}</p>
+                    <p className="text-xs text-white font-medium mt-1 leading-tight">{day}</p>
+                  </div>
+                ))}
+              </div>
+              {plan.tips.length > 0 && (
+                <div className="bg-brand-600/10 border border-brand-500/15 rounded-xl p-3">
+                  <p className="text-[10px] font-semibold text-brand-400 uppercase tracking-wider mb-2">Tips y Sugerencias</p>
+                  <ul className="space-y-1.5">
+                    {plan.tips.map((tip, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-gray-300">
+                        <svg className="w-3.5 h-3.5 text-brand-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /></svg>
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="glass rounded-2xl p-5 mb-6 border border-brand-500/15">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="w-11 h-11 bg-brand-600/15 border border-brand-500/20 rounded-xl flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white">Completa tu perfil de entrenamiento</p>
+              <p className="text-xs text-gray-500 mt-0.5">Configura tus datos corporales y objetivos para recibir tu plan de entrenamiento personalizado, métricas y sugerencias.</p>
+            </div>
+            <button onClick={() => onNavigate('my-profile')} className="px-4 py-2 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20 whitespace-nowrap">
+              Configurar perfil
+            </button>
+          </div>
+        </div>
+      )}
 
       {membership ? (
         <div className="glass rounded-2xl p-6 mb-6">
@@ -1516,6 +2098,12 @@ export default function App() {
     if (profile?.gym_id) await loadGym(profile.gym_id);
   }, [profile?.gym_id, loadGym]);
 
+  const reloadProfile = useCallback(async () => {
+    if (!session?.user) return;
+    const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+    if (data) setProfile(data);
+  }, [session?.user?.id]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => { setSession(session); if (!session) setLoading(false); });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setSession(session); if (!session) { setProfile(null); setGym(null); setLoading(false); } });
@@ -1560,16 +2148,17 @@ export default function App() {
       case 'plans': return <PlansPage />;
       case 'memberships': return <MembershipsPage />;
       case 'attendance': return <AttendancePage />;
-      case 'my-membership': return <MyMembershipPage />;
+      case 'my-membership': return <MyMembershipPage onNavigate={setView} />;
       case 'my-attendance': return <MyAttendancePage />;
       case 'available-plans': return <AvailablePlansPage />;
+      case 'my-profile': return <MemberSettingsPage />;
       case 'settings': return <SettingsPage />;
       default: return <AdminDashboard />;
     }
   }
 
   return (
-    <AppContext.Provider value={{ profile, session, gym, reloadGym, bcv }}>
+    <AppContext.Provider value={{ profile, session, gym, reloadGym, reloadProfile, bcv }}>
       <div className="flex min-h-screen bg-[#0f0f13]">
         <div className="hidden lg:block"><Sidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} /></div>
         <MobileSidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
