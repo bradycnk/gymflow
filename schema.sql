@@ -76,6 +76,20 @@ CREATE TABLE public.asistencias (
   gym_id UUID NOT NULL REFERENCES public.gyms(id) ON DELETE CASCADE
 );
 
+-- Pagos
+CREATE TABLE public.pagos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  member_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  membresia_id UUID REFERENCES public.membresias(id) ON DELETE SET NULL,
+  monto NUMERIC(10,2) NOT NULL CHECK (monto > 0),
+  metodo TEXT NOT NULL CHECK (metodo IN ('efectivo', 'transferencia', 'pago_movil', 'zelle', 'otro')),
+  referencia TEXT,
+  nota TEXT,
+  fecha TIMESTAMPTZ NOT NULL DEFAULT now(),
+  gym_id UUID NOT NULL REFERENCES public.gyms(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- ============================================================
 -- 2. ÍNDICES
 -- ============================================================

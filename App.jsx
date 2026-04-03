@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from './supabaseClient.js';
 
 // ============================================================
@@ -546,59 +547,251 @@ function MobileMoreMenu({ open, onClose, setView, profile, onLogout }) {
 // ADMIN: DASHBOARD
 // ============================================================
 
-function AdminDashboard() {
+function AdminDashboard({ onNavigate }) {
   const { profile, bcv: bcvData } = useApp();
-  const [stats, setStats] = useState({ total: 0, activos: 0, vencidosHoy: 0, ingresos: 0, porVencer: [] });
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [quickMember, setQuickMember] = useState('');
+  const [quickResult, setQuickResult] = useState(null);
+  const [quickLoading, setQuickLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
       if (!profile?.gym_id) return;
       setLoading(true);
       await supabase.rpc('refresh_membership_states', { p_gym_id: profile.gym_id });
-      const [membersRes, membresiasRes, porVencerRes] = await Promise.all([
+
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const sevenDaysAgo = new Date(now - 7 * 86400000).toISOString();
+
+      const [membersRes, membresiasRes, porVencerRes, asistHoyRes, pagosRes, pagosAllMonthRes, asistAllRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact' }).eq('gym_id', profile.gym_id).eq('role', 'member'),
-        supabase.from('membresias').select('*, planes(precio)').eq('gym_id', profile.gym_id),
-        supabase.from('membresias').select('*, profiles(nombre)').eq('gym_id', profile.gym_id).eq('estado', 'por_vencer'),
+        supabase.from('membresias').select('*, planes(precio, descuento)').eq('gym_id', profile.gym_id),
+        supabase.from('membresias').select('*, profiles(nombre, telefono)').eq('gym_id', profile.gym_id).eq('estado', 'por_vencer').order('fecha_fin'),
+        supabase.from('asistencias').select('*, profiles(nombre, foto_url)').eq('gym_id', profile.gym_id).gte('fecha_entrada', todayStart).order('fecha_entrada', { ascending: false }),
+        supabase.from('pagos').select('*').eq('gym_id', profile.gym_id).gte('fecha', todayStart),
+        supabase.from('pagos').select('*').eq('gym_id', profile.gym_id).gte('fecha', monthStart),
+        supabase.from('asistencias').select('member_id, fecha_entrada').eq('gym_id', profile.gym_id).gte('fecha_entrada', new Date(now - 30 * 86400000).toISOString()),
       ]);
+
       const total = membersRes.count || 0;
       const membresias = membresiasRes.data || [];
       const activos = membresias.filter((m) => m.estado === 'activo' || m.estado === 'por_vencer').length;
-      const today = new Date().toISOString().split('T')[0];
       const vencidosHoy = membresias.filter((m) => m.fecha_fin === today && m.estado === 'vencido').length;
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const ingresos = membresias.filter((m) => m.created_at >= monthStart && m.planes).reduce((sum, m) => sum + Number(m.planes.precio || 0), 0);
-      setStats({ total, activos, vencidosHoy, ingresos, porVencer: porVencerRes.data || [] });
+
+      // Ingresos from pagos table
+      const pagosHoy = pagosRes.data || [];
+      const pagosMonth = pagosAllMonthRes.data || [];
+      const ingresosHoy = pagosHoy.reduce((s, p) => s + Number(p.monto), 0);
+      const ingresosMes = pagosMonth.reduce((s, p) => s + Number(p.monto), 0);
+
+      // Weekly revenue chart (last 4 weeks)
+      const weeklyRevenue = [];
+      for (let w = 3; w >= 0; w--) {
+        const wStart = new Date(now - (w * 7 + now.getDay()) * 86400000);
+        wStart.setHours(0, 0, 0, 0);
+        const wEnd = new Date(wStart.getTime() + 7 * 86400000);
+        const weekTotal = pagosMonth.filter((p) => {
+          const d = new Date(p.fecha);
+          return d >= wStart && d < wEnd;
+        }).reduce((s, p) => s + Number(p.monto), 0);
+        weeklyRevenue.push({ label: `Sem ${4 - w}`, total: weekTotal });
+      }
+      const maxWeekly = Math.max(...weeklyRevenue.map((w) => w.total), 1);
+
+      // Inactive members (have active membership but no attendance in 7+ days)
+      const allAttendance = asistAllRes.data || [];
+      const lastAttendance = {};
+      allAttendance.forEach((a) => {
+        if (!lastAttendance[a.member_id] || new Date(a.fecha_entrada) > new Date(lastAttendance[a.member_id])) {
+          lastAttendance[a.member_id] = a.fecha_entrada;
+        }
+      });
+      const activeMembers = membresias.filter((m) => m.estado === 'activo' || m.estado === 'por_vencer').map((m) => m.member_id);
+      const inactivos = [...new Set(activeMembers)].filter((mid) => {
+        const last = lastAttendance[mid];
+        return !last || new Date(last) < new Date(sevenDaysAgo);
+      });
+
+      setStats({
+        total, activos, vencidosHoy, ingresosHoy, ingresosMes,
+        porVencer: porVencerRes.data || [],
+        asistHoy: asistHoyRes.data || [],
+        weeklyRevenue, maxWeekly,
+        inactivos: inactivos.length,
+        pagosHoyCount: pagosHoy.length,
+      });
       setLoading(false);
     }
     load();
   }, [profile?.gym_id]);
 
+  // Quick check-in
+  async function handleQuickCheckin(e) {
+    e.preventDefault();
+    if (!quickMember.trim()) return;
+    setQuickLoading(true); setQuickResult(null);
+    try {
+      // Search by name, cedula, or username
+      const q = quickMember.trim().toLowerCase();
+      const { data: members } = await supabase.from('profiles').select('*').eq('gym_id', profile.gym_id).eq('role', 'member');
+      const found = (members || []).find((m) =>
+        m.nombre?.toLowerCase().includes(q) || m.cedula?.toLowerCase() === q || m.username?.toLowerCase() === q
+      );
+      if (!found) { setQuickResult({ ok: false, msg: 'Miembro no encontrado' }); setQuickLoading(false); return; }
+
+      // Check membership
+      const { data: memb } = await supabase.from('membresias').select('*').eq('member_id', found.id).in('estado', ['activo', 'por_vencer']).limit(1);
+      if (!memb || memb.length === 0) { setQuickResult({ ok: false, msg: `${found.nombre} no tiene membresía activa` }); setQuickLoading(false); return; }
+
+      // Register attendance
+      const { error } = await supabase.from('asistencias').insert({ member_id: found.id, gym_id: profile.gym_id });
+      if (error) throw error;
+      setQuickResult({ ok: true, msg: `Check-in: ${found.nombre}`, estado: memb[0].estado });
+      setQuickMember('');
+    } catch (err) { setQuickResult({ ok: false, msg: err.message }); }
+    setQuickLoading(false);
+  }
+
   if (loading) return <Spinner />;
 
   return (
     <div className="animate-fadeIn">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-1">Resumen general de tu gimnasio</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+        </div>
       </div>
 
-      {stats.porVencer.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/15 rounded-2xl p-4 mb-6 animate-fadeIn">
-          <div className="flex items-center gap-2 mb-2">
-            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
-            <span className="font-semibold text-amber-300 text-sm">Membresías por vencer ({stats.porVencer.length})</span>
+      {/* Quick Actions Bar */}
+      <div className="glass rounded-2xl p-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleQuickCheckin} className="flex-1 flex gap-2">
+            <div className="relative flex-1">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input type="text" value={quickMember} onChange={(e) => setQuickMember(e.target.value)} placeholder="Check-in rápido: nombre, cédula o usuario..." className="w-full pl-9 pr-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-500/50 outline-none transition text-sm" />
+            </div>
+            <button type="submit" disabled={quickLoading} className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 disabled:opacity-50 transition text-sm font-semibold whitespace-nowrap">
+              {quickLoading ? '...' : 'Check-in'}
+            </button>
+          </form>
+          <div className="flex gap-2">
+            <button onClick={() => onNavigate('members')} className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition text-sm">+ Miembro</button>
+            <button onClick={() => onNavigate('memberships')} className="px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition text-sm">+ Membresía</button>
           </div>
-          <div className="space-y-1">{stats.porVencer.map((m) => <p key={m.id} className="text-sm text-amber-400/80">{m.profiles?.nombre || 'Miembro'} — vence el {formatDate(m.fecha_fin)}</p>)}</div>
         </div>
-      )}
+        {quickResult && (
+          <div className={`mt-3 px-3 py-2 rounded-xl text-sm flex items-center gap-2 ${quickResult.ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={quickResult.ok ? 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' : 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z'} /></svg>
+            {quickResult.msg}
+            {quickResult.estado === 'por_vencer' && <span className="text-amber-400 text-xs ml-1">(por vencer)</span>}
+          </div>
+        )}
+      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Total Miembros" value={stats.total} color="bg-blue-600" icon="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <StatCard label="Miembros" value={stats.total} color="bg-blue-600" icon="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
         <StatCard label="Activas" value={stats.activos} color="bg-emerald-600" icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        <StatCard label="Vencidas Hoy" value={stats.vencidosHoy} color="bg-red-600" icon="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        <StatCard label="Ingresos Mes" value={`$${stats.ingresos.toFixed(2)}`} subtext={bcvData?.rate ? formatBs(stats.ingresos, bcvData.rate) : null} color="bg-brand-600" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <StatCard label="Ingresos Hoy" value={`$${stats.ingresosHoy.toFixed(2)}`} subtext={bcvData?.rate ? formatBs(stats.ingresosHoy, bcvData.rate) : null} color="bg-brand-600" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <StatCard label="Ingresos Mes" value={`$${stats.ingresosMes.toFixed(2)}`} subtext={bcvData?.rate ? formatBs(stats.ingresosMes, bcvData.rate) : null} color="bg-violet-600" icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Weekly Revenue Chart */}
+        <div className="glass rounded-2xl p-5">
+          <h2 className="text-sm font-bold text-white mb-4">Ingresos por Semana</h2>
+          <div className="flex items-end gap-3 h-36">
+            {stats.weeklyRevenue.map((w, i) => (
+              <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-xs text-gray-400 font-semibold">${w.total.toFixed(0)}</span>
+                <div className="w-full bg-white/5 rounded-lg overflow-hidden" style={{ height: '100px' }}>
+                  <div
+                    className="w-full bg-gradient-to-t from-brand-600 to-brand-400 rounded-lg transition-all duration-500"
+                    style={{ height: `${Math.max(4, (w.total / stats.maxWeekly) * 100)}%`, marginTop: 'auto', position: 'relative', top: `${100 - Math.max(4, (w.total / stats.maxWeekly) * 100)}%` }}
+                  ></div>
+                </div>
+                <span className="text-[10px] text-gray-600">{w.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Today's Attendance */}
+        <div className="glass rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-white">Asistencia Hoy</h2>
+            <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-bold">{stats.asistHoy.length}</span>
+          </div>
+          <div className="space-y-2 max-h-36 overflow-y-auto">
+            {stats.asistHoy.length === 0 ? (
+              <p className="text-gray-600 text-sm text-center py-4">Sin asistencias hoy</p>
+            ) : stats.asistHoy.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 py-1.5">
+                {a.profiles?.foto_url ? (
+                  <img src={a.profiles.foto_url} alt="" className="w-7 h-7 rounded-lg object-cover" />
+                ) : (
+                  <div className="w-7 h-7 bg-brand-500/20 rounded-lg flex items-center justify-center text-[10px] font-bold text-brand-300">{a.profiles?.nombre?.charAt(0)?.toUpperCase() || '?'}</div>
+                )}
+                <span className="text-sm text-white flex-1 truncate">{a.profiles?.nombre}</span>
+                <span className="text-[10px] text-gray-500">{new Date(a.fecha_entrada).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Alerts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Expiring Soon */}
+        <div className="glass rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-white">Por Vencer</h2>
+            {stats.porVencer.length > 0 && <span className="px-2.5 py-1 bg-amber-500/15 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-bold">{stats.porVencer.length}</span>}
+          </div>
+          {stats.porVencer.length === 0 ? (
+            <p className="text-gray-600 text-sm text-center py-4">Sin vencimientos próximos</p>
+          ) : (
+            <div className="space-y-2 max-h-44 overflow-y-auto">
+              {stats.porVencer.map((m) => (
+                <div key={m.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{m.profiles?.nombre}</p>
+                    <p className="text-[10px] text-gray-500">Vence {formatDate(m.fecha_fin)}</p>
+                  </div>
+                  <button onClick={() => onNavigate('memberships')} className="px-3 py-1.5 text-[10px] font-semibold text-brand-400 border border-brand-500/20 rounded-lg hover:bg-brand-500/10 transition whitespace-nowrap">Renovar</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Inactive + Stats */}
+        <div className="glass rounded-2xl p-5">
+          <h2 className="text-sm font-bold text-white mb-4">Resumen</h2>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between py-2 border-b border-white/5">
+              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500"></div><span className="text-sm text-gray-400">Vencidas hoy</span></div>
+              <span className="text-sm font-bold text-white">{stats.vencidosHoy}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-white/5">
+              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"></div><span className="text-sm text-gray-400">Inactivos (+7 días)</span></div>
+              <span className="text-sm font-bold text-white">{stats.inactivos}</span>
+            </div>
+            <div className="flex items-center justify-between py-2 border-b border-white/5">
+              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className="text-sm text-gray-400">Check-ins hoy</span></div>
+              <span className="text-sm font-bold text-white">{stats.asistHoy.length}</span>
+            </div>
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-brand-500"></div><span className="text-sm text-gray-400">Pagos hoy</span></div>
+              <span className="text-sm font-bold text-white">{stats.pagosHoyCount}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -981,7 +1174,11 @@ function MembershipsPage() {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [form, setForm] = useState({ member_id: '', plan_id: '' });
+  const [payForm, setPayForm] = useState({ monto: '', metodo: 'efectivo', referencia: '', registrarPago: true });
   const [confirmAssign, setConfirmAssign] = useState(null);
+  const [showPayments, setShowPayments] = useState(false);
+  const [payments, setPayments] = useState([]);
+  const [paymentsDate, setPaymentsDate] = useState(new Date().toISOString().split('T')[0]);
 
   const loadData = useCallback(async () => {
     if (!profile?.gym_id) return;
@@ -999,13 +1196,21 @@ function MembershipsPage() {
 
   function getDaysRemaining(fechaFin) { const t = new Date(); t.setHours(0,0,0,0); const e = new Date(fechaFin); e.setHours(0,0,0,0); return Math.ceil((e - t) / 86400000); }
 
+  function getPrecioFinal(plan) {
+    const p = Number(plan.precio);
+    const d = Number(plan.descuento || 0);
+    return d > 0 ? p * (1 - d / 100) : p;
+  }
+
   function handleFormSubmit(e) {
     e.preventDefault(); setError('');
     const plan = planes.find((p) => p.id === form.plan_id);
     const member = members.find((m) => m.id === form.member_id);
     if (!plan || !member) { setError('Selecciona miembro y plan'); return; }
     const existingActive = membresias.find((m) => m.member_id === form.member_id && (m.estado === 'activo' || m.estado === 'por_vencer'));
-    setConfirmAssign({ member, plan, existingActive });
+    const precio = getPrecioFinal(plan);
+    setPayForm({ monto: precio.toFixed(2), metodo: 'efectivo', referencia: '', registrarPago: true });
+    setConfirmAssign({ member, plan, existingActive, precio });
   }
 
   async function executeAssign() {
@@ -1015,12 +1220,35 @@ function MembershipsPage() {
       if (existingActive) { const { error: updateError } = await supabase.from('membresias').update({ estado: 'vencido' }).eq('id', existingActive.id); if (updateError) throw updateError; }
       const fechaInicio = new Date().toISOString().split('T')[0];
       const fechaFin = new Date(Date.now() + plan.duracion_dias * 86400000).toISOString().split('T')[0];
-      const { error } = await supabase.from('membresias').insert({ member_id: member.id, plan_id: plan.id, fecha_inicio: fechaInicio, fecha_fin: fechaFin, gym_id: profile.gym_id });
+      const { data: membData, error } = await supabase.from('membresias').insert({ member_id: member.id, plan_id: plan.id, fecha_inicio: fechaInicio, fecha_fin: fechaFin, gym_id: profile.gym_id }).select().single();
       if (error) throw error;
+
+      // Register payment if enabled
+      if (payForm.registrarPago && parseFloat(payForm.monto) > 0) {
+        const { error: payError } = await supabase.from('pagos').insert({
+          member_id: member.id,
+          membresia_id: membData.id,
+          monto: parseFloat(payForm.monto),
+          metodo: payForm.metodo,
+          referencia: payForm.referencia.trim() || null,
+          gym_id: profile.gym_id,
+        });
+        if (payError) throw payError;
+      }
+
       setSuccess(existingActive ? `Membresía renovada para ${member.nombre}` : `Membresía asignada a ${member.nombre}`);
       setShowForm(false); setForm({ member_id: '', plan_id: '' }); loadData();
     } catch (err) { setError(err.message); }
   }
+
+  async function loadPayments() {
+    const start = paymentsDate + 'T00:00:00';
+    const end = paymentsDate + 'T23:59:59';
+    const { data } = await supabase.from('pagos').select('*, profiles(nombre), membresias(planes(nombre))').eq('gym_id', profile.gym_id).gte('fecha', start).lte('fecha', end).order('fecha', { ascending: false });
+    setPayments(data || []);
+  }
+
+  useEffect(() => { if (showPayments) loadPayments(); }, [showPayments, paymentsDate]);
 
   async function viewHistory(memberId) {
     const member = members.find((m) => m.id === memberId);
@@ -1042,14 +1270,65 @@ function MembershipsPage() {
     <div className="animate-fadeIn">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div><h1 className="text-2xl font-bold text-white">Membresías</h1><p className="text-gray-500 text-sm mt-0.5">Gestión y renovación</p></div>
-        <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-          Asignar / Renovar
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowPayments(!showPayments); }} className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl transition text-sm font-semibold ${showPayments ? 'bg-emerald-600 text-white' : 'bg-white/5 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10'}`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            Caja
+          </button>
+          <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-brand-600 to-amber-600 text-white rounded-xl hover:from-brand-500 hover:to-amber-500 transition text-sm font-semibold shadow-lg shadow-brand-600/20">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Asignar / Renovar
+          </button>
+        </div>
       </div>
 
       <ErrorMsg message={error} onClose={() => setError('')} />
       <SuccessMsg message={success} onClose={() => setSuccess('')} />
+
+      {/* Payments panel */}
+      {showPayments && (
+        <div className="glass rounded-2xl p-5 mb-6 animate-fadeIn">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-white">Caja del Día</h2>
+            <input type="date" value={paymentsDate} onChange={(e) => setPaymentsDate(e.target.value)} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-gray-300 text-sm focus:ring-1 focus:ring-brand-500/50 outline-none" />
+          </div>
+          {/* Totals */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5 text-center">
+              <p className="text-[10px] text-gray-500 uppercase">Total</p>
+              <p className="text-lg font-bold text-emerald-400">${payments.reduce((s, p) => s + Number(p.monto), 0).toFixed(2)}</p>
+              {bcvData?.rate && <p className="text-[10px] text-gray-600">{formatBs(payments.reduce((s, p) => s + Number(p.monto), 0), bcvData.rate)}</p>}
+            </div>
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5 text-center">
+              <p className="text-[10px] text-gray-500 uppercase">Efectivo</p>
+              <p className="text-sm font-bold text-white">${payments.filter((p) => p.metodo === 'efectivo').reduce((s, p) => s + Number(p.monto), 0).toFixed(2)}</p>
+            </div>
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5 text-center">
+              <p className="text-[10px] text-gray-500 uppercase">Transferencia</p>
+              <p className="text-sm font-bold text-white">${payments.filter((p) => p.metodo === 'transferencia').reduce((s, p) => s + Number(p.monto), 0).toFixed(2)}</p>
+            </div>
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/5 text-center">
+              <p className="text-[10px] text-gray-500 uppercase">Pago Móvil</p>
+              <p className="text-sm font-bold text-white">${payments.filter((p) => p.metodo === 'pago_movil').reduce((s, p) => s + Number(p.monto), 0).toFixed(2)}</p>
+            </div>
+          </div>
+          {/* Payment list */}
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {payments.length === 0 ? <p className="text-gray-600 text-sm text-center py-3">Sin pagos este día</p> : payments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white truncate">{p.profiles?.nombre}</p>
+                  <p className="text-[10px] text-gray-500">{p.membresias?.planes?.nombre || 'Pago'} · {new Date(p.fecha).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <div className="text-right ml-3">
+                  <p className="text-sm font-semibold text-emerald-400">${Number(p.monto).toFixed(2)}</p>
+                  <p className="text-[10px] text-gray-500 capitalize">{p.metodo?.replace('_', ' ')}{p.referencia ? ` · ${p.referencia}` : ''}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {porVencer.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/15 rounded-2xl p-4 mb-4"><div className="flex items-center gap-2 mb-2"><svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg><span className="font-semibold text-amber-300 text-sm">Por vencer ({porVencer.length})</span></div>
@@ -1074,19 +1353,53 @@ function MembershipsPage() {
         </div>
       )}
 
-      {/* Confirm modal */}
+      {/* Confirm modal with payment */}
       {confirmAssign && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="animate-scaleIn glass-strong rounded-2xl max-w-md w-full p-4 sm:p-6">
+          <div className="animate-scaleIn glass-strong rounded-2xl max-w-md w-full p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-white mb-3">{confirmAssign.existingActive ? 'Renovar Membresía' : 'Asignar Membresía'}</h3>
             <div className="text-gray-400 mb-4 space-y-2 text-sm">
               <p><span className="text-gray-500">Miembro:</span> <span className="text-white">{confirmAssign.member.nombre}</span></p>
-              <p><span className="text-gray-500">Plan:</span> <span className="text-white">{confirmAssign.plan.nombre} — ${confirmAssign.plan.precio}{bcvData?.rate && <span className="text-gray-500 ml-1">({formatBs(confirmAssign.plan.precio, bcvData.rate)})</span>}</span></p>
+              <p><span className="text-gray-500">Plan:</span> <span className="text-white">{confirmAssign.plan.nombre} — ${confirmAssign.precio?.toFixed(2)}{Number(confirmAssign.plan.descuento) > 0 ? ` (-${confirmAssign.plan.descuento}%)` : ''}{bcvData?.rate && <span className="text-gray-500 ml-1">({formatBs(confirmAssign.precio, bcvData.rate)})</span>}</span></p>
               {confirmAssign.existingActive && <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-amber-300 text-xs">La membresía actual pasará al historial.</div>}
             </div>
+
+            {/* Payment section */}
+            <div className="border-t border-white/10 pt-4 mb-4">
+              <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                <input type="checkbox" checked={payForm.registrarPago} onChange={(e) => setPayForm({ ...payForm, registrarPago: e.target.checked })} className="w-4 h-4 rounded bg-white/10 border-white/20 text-brand-500 focus:ring-brand-500/50" />
+                <span className="text-sm font-medium text-white">Registrar pago</span>
+              </label>
+              {payForm.registrarPago && (
+                <div className="space-y-3 animate-fadeIn">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Monto ($)</label>
+                      <input type="number" min="0" step="0.01" value={payForm.monto} onChange={(e) => setPayForm({ ...payForm, monto: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:ring-1 focus:ring-brand-500/50 outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Método</label>
+                      <select value={payForm.metodo} onChange={(e) => setPayForm({ ...payForm, metodo: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:ring-1 focus:ring-brand-500/50 outline-none appearance-none">
+                        <option value="efectivo">Efectivo</option>
+                        <option value="transferencia">Transferencia</option>
+                        <option value="pago_movil">Pago Móvil</option>
+                        <option value="zelle">Zelle</option>
+                        <option value="otro">Otro</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Referencia (opcional)</label>
+                    <input type="text" value={payForm.referencia} onChange={(e) => setPayForm({ ...payForm, referencia: e.target.value })} className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:ring-1 focus:ring-brand-500/50 outline-none" placeholder="Nro. de referencia" />
+                  </div>
+                  {bcvData?.rate && payForm.monto && <p className="text-xs text-gray-500">{formatBs(payForm.monto, bcvData.rate)}</p>}
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3 justify-end">
               <button onClick={() => setConfirmAssign(null)} className="px-4 py-2 text-gray-400 border border-white/10 rounded-xl hover:bg-white/5 transition">Cancelar</button>
-              <button onClick={executeAssign} className="px-4 py-2 bg-brand-600 text-white rounded-xl hover:bg-brand-500 transition">{confirmAssign.existingActive ? 'Renovar' : 'Asignar'}</button>
+              <button onClick={executeAssign} className="px-4 py-2 bg-brand-600 text-white rounded-xl hover:bg-brand-500 transition">{confirmAssign.existingActive ? 'Renovar' : 'Asignar'}{payForm.registrarPago ? ' y Cobrar' : ''}</button>
             </div>
           </div>
         </div>
@@ -1166,6 +1479,10 @@ function AttendancePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [scanning, setScanning] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanIntervalRef = useRef(null);
 
   const loadData = useCallback(async () => {
     if (!profile?.gym_id) return;
@@ -1186,9 +1503,62 @@ function AttendancePage() {
       if (!latestMembership) { setError(`${member.nombre} no tiene membresía vigente`); return; }
       const { error } = await supabase.from('asistencias').insert({ member_id: member.id, gym_id: profile.gym_id });
       if (error) throw error;
-      setSuccess(`Entrada registrada: ${member.nombre}`); setSearch(''); loadData();
+      setSuccess(`Entrada registrada: ${member.nombre}${latestMembership.estado === 'por_vencer' ? ' (membresía por vencer)' : ''}`);
+      setSearch(''); loadData();
     } catch (err) { setError(err.message); }
   }
+
+  async function handleQrResult(memberId) {
+    // Find the member by QR data (gymflow:MEMBER_ID)
+    const id = memberId.replace('gymflow:', '');
+    const member = members.find((m) => m.id === id);
+    if (!member) { setError('Miembro no encontrado'); return; }
+    await registerAttendance(member);
+    stopScanning();
+  }
+
+  async function startScanning() {
+    setScanning(true); setError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      // Use BarcodeDetector if available, otherwise fallback
+      if ('BarcodeDetector' in window) {
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        scanIntervalRef.current = setInterval(async () => {
+          if (!videoRef.current || videoRef.current.readyState < 2) return;
+          try {
+            const barcodes = await detector.detect(videoRef.current);
+            if (barcodes.length > 0) {
+              const data = barcodes[0].rawValue;
+              if (data.startsWith('gymflow:')) {
+                handleQrResult(data);
+              }
+            }
+          } catch {}
+        }, 500);
+      } else {
+        setError('Tu navegador no soporta escaneo QR. Usa Chrome 83+ o Edge.');
+        stopScanning();
+      }
+    } catch (err) {
+      setError('No se pudo acceder a la cámara: ' + err.message);
+      setScanning(false);
+    }
+  }
+
+  function stopScanning() {
+    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setScanning(false);
+  }
+
+  useEffect(() => { return () => stopScanning(); }, []);
 
   const searchResults = search.length >= 2 ? members.filter((m) => m.nombre?.toLowerCase().includes(search.toLowerCase()) || m.cedula?.toLowerCase().includes(search.toLowerCase())) : [];
 
@@ -1202,22 +1572,40 @@ function AttendancePage() {
 
       <div className="glass rounded-2xl p-6 mb-6">
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Registrar Entrada</h2>
-        <div className="relative">
-          <input type="text" placeholder="Buscar miembro..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-500/50 outline-none transition text-sm" />
-          {searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 glass-strong rounded-xl mt-1 z-10 max-h-60 overflow-y-auto">
-              {searchResults.map((m) => {
-                const hasActive = m.membresias?.some((mb) => mb.estado === 'activo' || mb.estado === 'por_vencer');
-                return (
-                  <button key={m.id} onClick={() => registerAttendance(m)} className="w-full text-left px-4 py-3 hover:bg-white/5 border-b border-white/5 last:border-0 flex justify-between items-center transition">
-                    <div><span className="font-medium text-white text-sm">{m.nombre}</span><span className="text-gray-500 text-xs ml-2">{m.cedula || ''}</span></div>
-                    {hasActive ? <span className="text-[10px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-semibold">Vigente</span> : <span className="text-[10px] bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full font-semibold">Sin membresía</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+        <div className="flex gap-2 mb-3">
+          <div className="relative flex-1">
+            <input type="text" placeholder="Buscar por nombre o cédula..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-600 focus:ring-2 focus:ring-brand-500/50 outline-none transition text-sm" />
+            {searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 glass-strong rounded-xl mt-1 z-10 max-h-60 overflow-y-auto">
+                {searchResults.map((m) => {
+                  const hasActive = m.membresias?.some((mb) => mb.estado === 'activo' || mb.estado === 'por_vencer');
+                  return (
+                    <button key={m.id} onClick={() => registerAttendance(m)} className="w-full text-left px-4 py-3 hover:bg-white/5 border-b border-white/5 last:border-0 flex justify-between items-center transition">
+                      <div><span className="font-medium text-white text-sm">{m.nombre}</span><span className="text-gray-500 text-xs ml-2">{m.cedula || ''}</span></div>
+                      {hasActive ? <span className="text-[10px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-semibold">Vigente</span> : <span className="text-[10px] bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full font-semibold">Sin membresía</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <button onClick={scanning ? stopScanning : startScanning}
+            className={`px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition ${scanning ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-brand-600/15 text-brand-400 border border-brand-500/20 hover:bg-brand-600/25'}`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+            <span className="hidden sm:inline">{scanning ? 'Detener' : 'Escanear QR'}</span>
+          </button>
         </div>
+
+        {/* QR Scanner */}
+        {scanning && (
+          <div className="mt-3 rounded-xl overflow-hidden border border-white/10 relative animate-fadeIn">
+            <video ref={videoRef} className="w-full max-h-64 object-cover bg-black" playsInline muted />
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-48 h-48 border-2 border-brand-400/50 rounded-2xl"></div>
+            </div>
+            <p className="text-center text-xs text-gray-400 py-2 bg-black/50">Apunta la cámara al código QR del miembro</p>
+          </div>
+        )}
       </div>
 
       <div className="glass rounded-2xl overflow-hidden">
@@ -1874,6 +2262,17 @@ function MyMembershipPage({ onNavigate }) {
             </div>
           )}
 
+          {/* QR Code for check-in */}
+          {(membership.estado === 'activo' || membership.estado === 'por_vencer') && (
+            <div className="mb-5 bg-white/[0.03] rounded-xl p-4 border border-white/5 flex flex-col items-center">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Tu código QR de acceso</p>
+              <div className="bg-white p-3 rounded-xl">
+                <QRCodeSVG value={`gymflow:${profile.id}`} size={140} level="M" />
+              </div>
+              <p className="text-[10px] text-gray-600 mt-2">Muestra este código al llegar al gym</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5"><p className="text-xs text-gray-500 uppercase tracking-wider">Inicio</p><p className="font-semibold text-white mt-1">{formatDate(membership.fecha_inicio)}</p></div>
             <div className="bg-white/[0.03] rounded-xl p-4 border border-white/5"><p className="text-xs text-gray-500 uppercase tracking-wider">Vencimiento</p><p className="font-semibold text-white mt-1">{formatDate(membership.fecha_fin)}</p></div>
@@ -2272,7 +2671,7 @@ export default function App() {
 
   function renderView() {
     switch (view) {
-      case 'dashboard': return <AdminDashboard />;
+      case 'dashboard': return <AdminDashboard onNavigate={setView} />;
       case 'members': return <MembersPage />;
       case 'plans': return <PlansPage />;
       case 'memberships': return <MembershipsPage />;
