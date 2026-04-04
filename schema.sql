@@ -39,6 +39,7 @@ CREATE TABLE public.profiles (
   objetivo_principal TEXT CHECK (objetivo_principal IN ('hipertrofia', 'fuerza', 'perdida_grasa', 'recomposicion')),
   frecuencia_dias INTEGER CHECK (frecuencia_dias BETWEEN 1 AND 7),
   duracion_minutos INTEGER CHECK (duracion_minutos BETWEEN 15 AND 180),
+  notas TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -90,6 +91,37 @@ CREATE TABLE public.pagos (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Productos del gimnasio
+CREATE TABLE public.productos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre TEXT NOT NULL,
+  categoria TEXT NOT NULL DEFAULT 'suplemento' CHECK (categoria IN ('suplemento', 'bebida', 'accesorio', 'ropa', 'otro')),
+  precio NUMERIC(10,2) NOT NULL CHECK (precio >= 0),
+  costo NUMERIC(10,2) DEFAULT 0 CHECK (costo >= 0),
+  stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  stock_minimo INTEGER NOT NULL DEFAULT 5,
+  descripcion TEXT,
+  activo BOOLEAN DEFAULT true,
+  gym_id UUID NOT NULL REFERENCES public.gyms(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Ventas de productos
+CREATE TABLE public.ventas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  producto_id UUID NOT NULL REFERENCES public.productos(id) ON DELETE RESTRICT,
+  member_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  cantidad INTEGER NOT NULL DEFAULT 1 CHECK (cantidad > 0),
+  precio_unitario NUMERIC(10,2) NOT NULL CHECK (precio_unitario >= 0),
+  total NUMERIC(10,2) NOT NULL CHECK (total >= 0),
+  metodo TEXT NOT NULL CHECK (metodo IN ('efectivo', 'transferencia', 'pago_movil', 'zelle', 'otro')),
+  referencia TEXT,
+  nota TEXT,
+  fecha TIMESTAMPTZ NOT NULL DEFAULT now(),
+  gym_id UUID NOT NULL REFERENCES public.gyms(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- ============================================================
 -- 2. ÍNDICES
 -- ============================================================
@@ -105,6 +137,11 @@ CREATE INDEX idx_membresias_fecha_fin ON public.membresias(fecha_fin);
 CREATE INDEX idx_asistencias_member ON public.asistencias(member_id);
 CREATE INDEX idx_asistencias_gym ON public.asistencias(gym_id);
 CREATE INDEX idx_asistencias_fecha ON public.asistencias(fecha_entrada);
+CREATE INDEX idx_productos_gym ON public.productos(gym_id);
+CREATE INDEX idx_productos_categoria ON public.productos(categoria);
+CREATE INDEX idx_ventas_gym ON public.ventas(gym_id);
+CREATE INDEX idx_ventas_producto ON public.ventas(producto_id);
+CREATE INDEX idx_ventas_fecha ON public.ventas(fecha);
 
 -- ============================================================
 -- 3. FUNCIONES Y TRIGGERS
@@ -330,6 +367,47 @@ CREATE POLICY "Admins manage attendance"
 CREATE POLICY "Members see own attendance"
   ON public.asistencias FOR SELECT
   USING (member_id = auth.uid());
+
+-- ---- PRODUCTOS ----
+ALTER TABLE public.productos ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage products"
+  ON public.productos FOR ALL
+  USING (gym_id = public.get_my_gym_id() AND public.is_admin());
+
+CREATE POLICY "Members view products"
+  ON public.productos FOR SELECT
+  USING (gym_id = public.get_my_gym_id());
+
+-- ---- VENTAS ----
+ALTER TABLE public.ventas ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins manage sales"
+  ON public.ventas FOR ALL
+  USING (gym_id = public.get_my_gym_id() AND public.is_admin());
+
+CREATE POLICY "Members see own sales"
+  ON public.ventas FOR SELECT
+  USING (member_id = auth.uid());
+
+-- ---- TRIGGER: descontar stock al vender ----
+CREATE OR REPLACE FUNCTION public.trigger_descontar_stock()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.productos
+  SET stock = stock - NEW.cantidad
+  WHERE id = NEW.producto_id;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_venta_stock
+AFTER INSERT ON public.ventas
+FOR EACH ROW
+EXECUTE FUNCTION public.trigger_descontar_stock();
 
 -- ============================================================
 -- 5. FUNCIÓN RPC: actualizar estados (llamar desde el frontend)

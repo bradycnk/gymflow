@@ -96,6 +96,80 @@ function Spinner() {
   );
 }
 
+function GlobalSearch({ open, onClose, onNavigate }) {
+  const { profile } = useApp();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
+  const isAdmin = profile?.role === 'admin';
+
+  useEffect(() => { if (open) { setQuery(''); setResults([]); setTimeout(() => inputRef.current?.focus(), 100); } }, [open]);
+
+  useEffect(() => {
+    if (!query.trim() || !profile?.gym_id) { setResults([]); return; }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      const q = query.toLowerCase();
+      const fetches = [
+        supabase.from('profiles').select('id, nombre, username, email, role, foto_url').eq('gym_id', profile.gym_id).eq('role', 'member').or(`nombre.ilike.%${q}%,username.ilike.%${q}%,email.ilike.%${q}%,cedula.ilike.%${q}%`).limit(5),
+      ];
+      if (isAdmin) {
+        fetches.push(supabase.from('planes').select('id, nombre, precio, categoria').eq('gym_id', profile.gym_id).ilike('nombre', `%${q}%`).limit(3));
+        fetches.push(supabase.from('productos').select('id, nombre, precio, categoria, stock').eq('gym_id', profile.gym_id).ilike('nombre', `%${q}%`).limit(3));
+      }
+      const responses = await Promise.all(fetches);
+      const items = [];
+      (responses[0].data || []).forEach(m => items.push({ type: 'member', label: m.nombre, sub: m.username || m.email, icon: m.foto_url, view: 'members' }));
+      if (isAdmin && responses[1]) (responses[1].data || []).forEach(p => items.push({ type: 'plan', label: p.nombre, sub: `$${Number(p.precio).toFixed(2)} · ${p.categoria}`, view: 'plans' }));
+      if (isAdmin && responses[2]) (responses[2].data || []).forEach(p => items.push({ type: 'product', label: p.nombre, sub: `$${Number(p.precio).toFixed(2)} · ${p.stock} uds`, view: 'products' }));
+      setResults(items);
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, profile?.gym_id, isAdmin]);
+
+  if (!open) return null;
+
+  const typeIcons = { member: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z', plan: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2', product: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' };
+  const typeLabels = { member: 'Miembro', plan: 'Plan', product: 'Producto' };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[15vh] p-4">
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="relative bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-lg animate-scaleIn overflow-hidden shadow-2xl">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10">
+          <svg className="w-5 h-5 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar miembros, planes, productos..."
+            className="flex-1 bg-transparent text-white text-sm placeholder-gray-500 outline-none" />
+          <kbd className="hidden sm:inline text-[10px] text-gray-600 border border-white/10 rounded px-1.5 py-0.5">ESC</kbd>
+        </div>
+        {loading && <div className="px-4 py-3"><div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>}
+        {!loading && query && results.length === 0 && <p className="px-4 py-6 text-center text-sm text-gray-500">Sin resultados para "{query}"</p>}
+        {results.length > 0 && (
+          <div className="max-h-[50vh] overflow-y-auto py-2">
+            {results.map((r, i) => (
+              <button key={i} onClick={() => { onNavigate(r.view); onClose(); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition text-left">
+                {r.icon ? <img src={r.icon} alt="" className="w-8 h-8 rounded-lg object-cover" /> : (
+                  <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={typeIcons[r.type]} /></svg>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{r.label}</p>
+                  <p className="text-xs text-gray-500 truncate">{r.sub}</p>
+                </div>
+                <span className="text-[10px] text-gray-600 uppercase tracking-wider">{typeLabels[r.type]}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ErrorMsg({ message, onClose }) {
   if (!message) return null;
   return (
@@ -378,7 +452,7 @@ function AuthPage() {
 // LAYOUT / NAVEGACIÓN PRO
 // ============================================================
 
-function Sidebar({ currentView, setView, profile, onLogout }) {
+function Sidebar({ currentView, setView, profile, onLogout, onSearch }) {
   const { gym } = useApp();
   const isAdmin = profile?.role === 'admin';
   const adminLinks = [
@@ -387,6 +461,8 @@ function Sidebar({ currentView, setView, profile, onLogout }) {
     { id: 'plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
     { id: 'memberships', label: 'Membresías', icon: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
     { id: 'attendance', label: 'Asistencia', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+    { id: 'reports', label: 'Reportes', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+    { id: 'products', label: 'Productos', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
   ];
   const memberLinks = [
     { id: 'my-membership', label: 'Mi Membresía', icon: 'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
@@ -406,6 +482,13 @@ function Sidebar({ currentView, setView, profile, onLogout }) {
             <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{isAdmin ? 'Admin Panel' : 'Miembro'}</p>
           </div>
         </div>
+      </div>
+
+      <div className="px-3 pt-3">
+        <button onClick={onSearch} className="w-full flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-500 hover:text-gray-300 hover:bg-white/10 transition">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+          Buscar... <kbd className="ml-auto text-[10px] text-gray-600 border border-white/10 rounded px-1 py-0.5">Ctrl+K</kbd>
+        </button>
       </div>
 
       <nav className="flex-1 p-3 space-y-0.5">
@@ -507,6 +590,8 @@ function MobileMoreMenu({ open, onClose, setView, profile, onLogout }) {
   const isAdmin = profile?.role === 'admin';
   const extraLinks = isAdmin
     ? [{ id: 'plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+       { id: 'reports', label: 'Reportes', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+       { id: 'products', label: 'Productos', icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
        { id: 'settings', label: 'Configuración', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' }]
     : [{ id: 'available-plans', label: 'Planes', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' }];
 
@@ -567,7 +652,7 @@ function AdminDashboard({ onNavigate }) {
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
       const sevenDaysAgo = new Date(now - 7 * 86400000).toISOString();
 
-      const [membersRes, membresiasRes, porVencerRes, asistHoyRes, pagosRes, pagosAllMonthRes, asistAllRes] = await Promise.all([
+      const [membersRes, membresiasRes, porVencerRes, asistHoyRes, pagosRes, pagosAllMonthRes, asistAllRes, ventasHoyRes, ventasMonthRes] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact' }).eq('gym_id', profile.gym_id).eq('role', 'member'),
         supabase.from('membresias').select('*, planes(precio, descuento)').eq('gym_id', profile.gym_id),
         supabase.from('membresias').select('*, profiles(nombre, telefono)').eq('gym_id', profile.gym_id).eq('estado', 'por_vencer').order('fecha_fin'),
@@ -575,6 +660,8 @@ function AdminDashboard({ onNavigate }) {
         supabase.from('pagos').select('*').eq('gym_id', profile.gym_id).gte('fecha', todayStart),
         supabase.from('pagos').select('*').eq('gym_id', profile.gym_id).gte('fecha', monthStart),
         supabase.from('asistencias').select('member_id, fecha_entrada').eq('gym_id', profile.gym_id).gte('fecha_entrada', new Date(now - 30 * 86400000).toISOString()),
+        supabase.from('ventas').select('total').eq('gym_id', profile.gym_id).gte('fecha', todayStart),
+        supabase.from('ventas').select('total, fecha').eq('gym_id', profile.gym_id).gte('fecha', monthStart),
       ]);
 
       const total = membersRes.count || 0;
@@ -582,11 +669,13 @@ function AdminDashboard({ onNavigate }) {
       const activos = membresias.filter((m) => m.estado === 'activo' || m.estado === 'por_vencer').length;
       const vencidosHoy = membresias.filter((m) => m.fecha_fin === today && m.estado === 'vencido').length;
 
-      // Ingresos from pagos table
+      // Ingresos from pagos + ventas tables
       const pagosHoy = pagosRes.data || [];
       const pagosMonth = pagosAllMonthRes.data || [];
-      const ingresosHoy = pagosHoy.reduce((s, p) => s + Number(p.monto), 0);
-      const ingresosMes = pagosMonth.reduce((s, p) => s + Number(p.monto), 0);
+      const ventasHoy = ventasHoyRes.data || [];
+      const ventasMonth = ventasMonthRes.data || [];
+      const ingresosHoy = pagosHoy.reduce((s, p) => s + Number(p.monto), 0) + ventasHoy.reduce((s, v) => s + Number(v.total), 0);
+      const ingresosMes = pagosMonth.reduce((s, p) => s + Number(p.monto), 0) + ventasMonth.reduce((s, v) => s + Number(v.total), 0);
 
       // Weekly revenue chart (last 4 weeks)
       const weeklyRevenue = [];
@@ -594,10 +683,9 @@ function AdminDashboard({ onNavigate }) {
         const wStart = new Date(now - (w * 7 + now.getDay()) * 86400000);
         wStart.setHours(0, 0, 0, 0);
         const wEnd = new Date(wStart.getTime() + 7 * 86400000);
-        const weekTotal = pagosMonth.filter((p) => {
-          const d = new Date(p.fecha);
-          return d >= wStart && d < wEnd;
-        }).reduce((s, p) => s + Number(p.monto), 0);
+        const weekPagos = pagosMonth.filter((p) => { const d = new Date(p.fecha); return d >= wStart && d < wEnd; }).reduce((s, p) => s + Number(p.monto), 0);
+        const weekVentas = ventasMonth.filter((v) => { const d = new Date(v.fecha); return d >= wStart && d < wEnd; }).reduce((s, v) => s + Number(v.total), 0);
+        const weekTotal = weekPagos + weekVentas;
         weeklyRevenue.push({ label: `Sem ${4 - w}`, total: weekTotal });
       }
       const maxWeekly = Math.max(...weeklyRevenue.map((w) => w.total), 1);
@@ -757,15 +845,22 @@ function AdminDashboard({ onNavigate }) {
             <p className="text-gray-600 text-sm text-center py-4">Sin vencimientos próximos</p>
           ) : (
             <div className="space-y-2 max-h-44 overflow-y-auto">
-              {stats.porVencer.map((m) => (
-                <div key={m.id} className="flex items-center justify-between gap-3 py-1.5">
+              {stats.porVencer.map((m) => {
+                const phone = m.profiles?.telefono?.replace(/[^0-9+]/g, '');
+                const waMsg = `Hola ${m.profiles?.nombre}, te recordamos que tu membresía está por vencer (${formatDate(m.fecha_fin)}). ¡Renuévala para seguir entrenando!`;
+                return (
+                <div key={m.id} className="flex items-center justify-between gap-2 py-1.5">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{m.profiles?.nombre}</p>
                     <p className="text-[10px] text-gray-500">Vence {formatDate(m.fecha_fin)}</p>
                   </div>
-                  <button onClick={() => onNavigate('memberships')} className="px-3 py-1.5 text-[10px] font-semibold text-brand-400 border border-brand-500/20 rounded-lg hover:bg-brand-500/10 transition whitespace-nowrap">Renovar</button>
+                  <div className="flex gap-1.5 shrink-0">
+                    {phone && <a href={`https://wa.me/${phone}?text=${encodeURIComponent(waMsg)}`} target="_blank" rel="noopener noreferrer" className="px-2 py-1.5 text-[10px] font-semibold text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/10 transition" title="WhatsApp">WA</a>}
+                    <button onClick={() => onNavigate('memberships')} className="px-2 py-1.5 text-[10px] font-semibold text-brand-400 border border-brand-500/20 rounded-lg hover:bg-brand-500/10 transition whitespace-nowrap">Renovar</button>
+                  </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -814,6 +909,9 @@ function MembersPage() {
   const [success, setSuccess] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [form, setForm] = useState({ nombre: '', username: '', password: '', cedula: '', telefono: '', email: '', plan_id: '' });
+  const [notesModal, setNotesModal] = useState(null); // member object
+  const [noteText, setNoteText] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!profile?.gym_id) return;
@@ -857,6 +955,13 @@ function MembersPage() {
   async function handleDelete(member) {
     try { const { error } = await supabase.from('profiles').delete().eq('id', member.id); if (error) throw error; setSuccess('Miembro eliminado'); setConfirmDelete(null); loadData(); }
     catch (err) { setError(err.message); }
+  }
+
+  async function saveNote() {
+    if (!notesModal) return;
+    setSavingNote(true);
+    await supabase.from('profiles').update({ notas: noteText || null }).eq('id', notesModal.id);
+    setSavingNote(false); setNotesModal(null); loadData();
   }
 
   const filtered = members.filter((m) => {
@@ -935,30 +1040,83 @@ function MembersPage() {
             <tbody className="divide-y divide-white/5">
               {filtered.length === 0 ? (
                 <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-600">No se encontraron miembros</td></tr>
-              ) : filtered.map((m) => (
-                <tr key={m.id} className="hover:bg-white/[0.02] transition">
-                  <td className="px-4 py-3"><div className="font-medium text-white">{m.nombre}</div><div className="text-[11px] text-gray-600">{m.email}</div></td>
+              ) : filtered.map((m) => {
+                const isExpiring = m.membership?.estado === 'por_vencer';
+                const isExpired = m.membership?.estado === 'vencido';
+                const phone = m.telefono?.replace(/[^0-9+]/g, '');
+                const gymName = profile?.nombre || 'el gym';
+                const whatsappMsg = isExpiring
+                  ? `Hola ${m.nombre}, te recordamos que tu membresía en ${gymName} está por vencer. ¡Renuévala para seguir entrenando!`
+                  : isExpired
+                  ? `Hola ${m.nombre}, tu membresía en ${gymName} ha vencido. ¡Te esperamos de vuelta!`
+                  : '';
+                return (
+                <tr key={m.id} className={`hover:bg-white/[0.02] transition ${isExpiring ? 'bg-amber-500/[0.03]' : isExpired ? 'bg-red-500/[0.03]' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {m.foto_url ? (
+                        <img src={m.foto_url} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 bg-gradient-to-br from-brand-500/30 to-amber-500/30 rounded-lg flex items-center justify-center text-xs font-bold text-brand-300 shrink-0">{m.nombre?.charAt(0)?.toUpperCase() || '?'}</div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-medium text-white flex items-center gap-1.5">
+                          {m.nombre}
+                          {isExpiring && <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" title="Por vencer"></span>}
+                          {isExpired && <span className="w-2 h-2 bg-red-500 rounded-full" title="Vencida"></span>}
+                          {m.notas && <span className="w-2 h-2 bg-blue-400 rounded-full" title="Tiene notas"></span>}
+                        </div>
+                        <div className="text-[11px] text-gray-600 truncate">{m.notas ? <span className="text-blue-400/70">{m.notas.length > 30 ? m.notas.slice(0,30)+'...' : m.notas}</span> : m.email}</div>
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-gray-400 hidden sm:table-cell font-mono text-xs">{m.username || '—'}</td>
                   <td className="px-4 py-3 text-gray-400 hidden sm:table-cell">{m.cedula || '—'}</td>
                   <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{m.telefono || '—'}</td>
                   <td className="px-4 py-3">{m.membership ? <Badge estado={m.membership.estado} /> : <span className="text-xs text-gray-600">Sin membresía</span>}</td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => { setForm({ nombre: m.nombre, cedula: m.cedula || '', telefono: m.telefono || '', email: m.email || '', plan_id: '', username: '', password: '' }); setEditing(m); setShowForm(true); }} className="w-9 h-9 flex items-center justify-center text-brand-400 bg-brand-500/10 border border-brand-500/20 rounded-full hover:bg-brand-500/20 transition" title="Editar">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    <div className="flex justify-end gap-1.5">
+                      {(isExpiring || isExpired) && phone && (
+                        <a href={`https://wa.me/${phone}?text=${encodeURIComponent(whatsappMsg)}`} target="_blank" rel="noopener noreferrer" className="w-8 h-8 flex items-center justify-center text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full hover:bg-emerald-500/20 transition" title="Enviar WhatsApp">
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        </a>
+                      )}
+                      <button onClick={() => { setNotesModal(m); setNoteText(m.notas || ''); }} className={`w-8 h-8 flex items-center justify-center rounded-full hover:bg-blue-500/20 transition ${m.notas ? 'text-blue-400 bg-blue-500/10 border border-blue-500/20' : 'text-gray-500 bg-white/5 border border-white/10'}`} title="Notas">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
                       </button>
-                      <button onClick={() => setConfirmDelete(m)} className="w-9 h-9 flex items-center justify-center text-red-400 bg-red-500/10 border border-red-500/20 rounded-full hover:bg-red-500/20 transition" title="Eliminar">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      <button onClick={() => { setForm({ nombre: m.nombre, cedula: m.cedula || '', telefono: m.telefono || '', email: m.email || '', plan_id: '', username: '', password: '' }); setEditing(m); setShowForm(true); }} className="w-8 h-8 flex items-center justify-center text-brand-400 bg-brand-500/10 border border-brand-500/20 rounded-full hover:bg-brand-500/20 transition" title="Editar">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                      <button onClick={() => setConfirmDelete(m)} className="w-8 h-8 flex items-center justify-center text-red-400 bg-red-500/10 border border-red-500/20 rounded-full hover:bg-red-500/20 transition" title="Eliminar">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
       <ConfirmModal open={!!confirmDelete} title="Eliminar Miembro" message={`¿Eliminar a ${confirmDelete?.nombre}? Esta acción no se puede deshacer.`} onConfirm={() => handleDelete(confirmDelete)} onCancel={() => setConfirmDelete(null)} />
+
+      {/* Notes Modal */}
+      {notesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setNotesModal(null)}></div>
+          <div className="relative bg-[#1a1a24] border border-white/10 rounded-2xl p-6 w-full max-w-md animate-scaleIn">
+            <h3 className="text-lg font-bold text-white mb-1">Notas</h3>
+            <p className="text-sm text-gray-500 mb-4">{notesModal.nombre}</p>
+            <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} placeholder="Ej: lesión en rodilla, debe 1 mes, entrena lunes/miércoles..."
+              className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-brand-500/50 resize-none" />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => setNotesModal(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-400 border border-white/10 hover:bg-white/5 transition">Cancelar</button>
+              <button onClick={saveNote} disabled={savingNote} className="flex-1 gradient-orange text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition">{savingNote ? 'Guardando...' : 'Guardar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2424,6 +2582,550 @@ function AvailablePlansPage() {
 }
 
 // ============================================================
+// HELPER: CSV EXPORT
+// ============================================================
+
+function downloadCSV(filename, headers, rows) {
+  const bom = '\uFEFF';
+  const csv = bom + [headers.join(','), ...rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ============================================================
+// ADMIN: REPORTES
+// ============================================================
+
+function ReportsPage() {
+  const { profile, bcv: bcvData } = useApp();
+  const [loading, setLoading] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
+  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  async function exportMembers() {
+    setLoading(true); setError('');
+    try {
+      const { data: members } = await supabase.from('profiles').select('*').eq('gym_id', profile.gym_id).eq('role', 'member').order('nombre');
+      const { data: membresias } = await supabase.from('membresias').select('*, planes(nombre)').eq('gym_id', profile.gym_id);
+      const headers = ['Nombre', 'Usuario', 'Email', 'Cédula', 'Teléfono', 'Fecha Ingreso', 'Plan Actual', 'Estado', 'Vencimiento'];
+      const rows = (members || []).map((m) => {
+        const latest = (membresias || []).filter((mb) => mb.member_id === m.id).sort((a, b) => new Date(b.fecha_fin) - new Date(a.fecha_fin))[0];
+        return [m.nombre, m.username, m.email, m.cedula, m.telefono, m.fecha_ingreso, latest?.planes?.nombre || 'Sin plan', latest?.estado || 'Sin membresía', latest?.fecha_fin || ''];
+      });
+      downloadCSV(`miembros_${dateTo}.csv`, headers, rows);
+      setSuccess(`${rows.length} miembros exportados`);
+    } catch (err) { setError(err.message); } finally { setLoading(false); }
+  }
+
+  async function exportPayments() {
+    setLoading(true); setError('');
+    try {
+      const { data } = await supabase.from('pagos').select('*, profiles(nombre), membresias(planes(nombre))').eq('gym_id', profile.gym_id).gte('fecha', dateFrom + 'T00:00:00').lte('fecha', dateTo + 'T23:59:59').order('fecha', { ascending: false });
+      const payments = data || [];
+      const headers = ['Fecha', 'Hora', 'Miembro', 'Plan', 'Monto ($)', 'Método', 'Referencia'];
+      const rows = payments.map((p) => [
+        new Date(p.fecha).toLocaleDateString('es-ES'), new Date(p.fecha).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+        p.profiles?.nombre, p.membresias?.planes?.nombre || 'N/A', Number(p.monto).toFixed(2), p.metodo?.replace('_', ' '), p.referencia || '',
+      ]);
+      const total = payments.reduce((s, p) => s + Number(p.monto), 0);
+      rows.push(['', '', '', 'TOTAL', total.toFixed(2), '', '']);
+      downloadCSV(`pagos_${dateFrom}_${dateTo}.csv`, headers, rows);
+      setSuccess(`${payments.length} pagos exportados — Total: $${total.toFixed(2)}`);
+    } catch (err) { setError(err.message); } finally { setLoading(false); }
+  }
+
+  async function exportAttendance() {
+    setLoading(true); setError('');
+    try {
+      const { data } = await supabase.from('asistencias').select('*, profiles(nombre, cedula)').eq('gym_id', profile.gym_id).gte('fecha_entrada', dateFrom + 'T00:00:00').lte('fecha_entrada', dateTo + 'T23:59:59').order('fecha_entrada', { ascending: false });
+      const records = data || [];
+      const headers = ['Fecha', 'Hora', 'Miembro', 'Cédula'];
+      const rows = records.map((a) => [
+        new Date(a.fecha_entrada).toLocaleDateString('es-ES'), new Date(a.fecha_entrada).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+        a.profiles?.nombre, a.profiles?.cedula || '',
+      ]);
+      rows.push(['', '', 'TOTAL ENTRADAS', records.length]);
+      downloadCSV(`asistencia_${dateFrom}_${dateTo}.csv`, headers, rows);
+      setSuccess(`${records.length} asistencias exportadas`);
+    } catch (err) { setError(err.message); } finally { setLoading(false); }
+  }
+
+  async function exportMonthlyReport() {
+    setLoading(true); setError('');
+    try {
+      const start = dateFrom + 'T00:00:00';
+      const end = dateTo + 'T23:59:59';
+      const [membersRes, membresiasRes, pagosRes, asistRes] = await Promise.all([
+        supabase.from('profiles').select('*').eq('gym_id', profile.gym_id).eq('role', 'member'),
+        supabase.from('membresias').select('*, planes(nombre, precio)').eq('gym_id', profile.gym_id).gte('created_at', start).lte('created_at', end),
+        supabase.from('pagos').select('*').eq('gym_id', profile.gym_id).gte('fecha', start).lte('fecha', end),
+        supabase.from('asistencias').select('*').eq('gym_id', profile.gym_id).gte('fecha_entrada', start).lte('fecha_entrada', end),
+      ]);
+      const members = membersRes.data || [];
+      const membresias = membresiasRes.data || [];
+      const pagos = pagosRes.data || [];
+      const asist = asistRes.data || [];
+      const nuevos = members.filter((m) => m.created_at >= start && m.created_at <= end).length;
+      const totalIngresos = pagos.reduce((s, p) => s + Number(p.monto), 0);
+      const byMethod = {};
+      pagos.forEach((p) => { byMethod[p.metodo] = (byMethod[p.metodo] || 0) + Number(p.monto); });
+
+      const headers = ['Métrica', 'Valor'];
+      const rows = [
+        ['Período', `${dateFrom} a ${dateTo}`],
+        ['Total miembros registrados', members.length],
+        ['Nuevos miembros en período', nuevos],
+        ['Membresías asignadas/renovadas', membresias.length],
+        ['Total asistencias', asist.length],
+        ['Promedio asistencias/día', (asist.length / Math.max(1, Math.ceil((new Date(dateTo) - new Date(dateFrom)) / 86400000))).toFixed(1)],
+        ['Total ingresos ($)', totalIngresos.toFixed(2)],
+        ...Object.entries(byMethod).map(([m, v]) => [`Ingresos ${m.replace('_', ' ')} ($)`, v.toFixed(2)]),
+      ];
+      downloadCSV(`reporte_${dateFrom}_${dateTo}.csv`, headers, rows);
+      setSuccess('Reporte mensual exportado');
+    } catch (err) { setError(err.message); } finally { setLoading(false); }
+  }
+
+  const inputClass = "px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:ring-2 focus:ring-brand-500/50 outline-none";
+
+  return (
+    <div className="animate-fadeIn max-w-3xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Reportes</h1>
+        <p className="text-gray-500 text-sm mt-1">Exporta datos de tu gimnasio</p>
+      </div>
+
+      <ErrorMsg message={error} onClose={() => setError('')} />
+      <SuccessMsg message={success} onClose={() => setSuccess('')} />
+
+      {/* Date range */}
+      <div className="glass rounded-2xl p-5 mb-6">
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Rango de Fechas</h2>
+        <div className="flex flex-wrap gap-3 items-center">
+          <div><label className="block text-xs text-gray-500 mb-1">Desde</label><input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inputClass} /></div>
+          <div><label className="block text-xs text-gray-500 mb-1">Hasta</label><input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputClass} /></div>
+        </div>
+      </div>
+
+      {/* Export buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button onClick={exportMembers} disabled={loading} className="glass rounded-2xl p-5 text-left card-hover group">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-blue-600/15 border border-blue-500/20 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg></div>
+            <div><h3 className="text-sm font-bold text-white group-hover:text-brand-400 transition">Lista de Miembros</h3><p className="text-xs text-gray-500">Todos los miembros con estado actual</p></div>
+          </div>
+        </button>
+
+        <button onClick={exportPayments} disabled={loading} className="glass rounded-2xl p-5 text-left card-hover group">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-emerald-600/15 border border-emerald-500/20 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg></div>
+            <div><h3 className="text-sm font-bold text-white group-hover:text-brand-400 transition">Pagos / Ingresos</h3><p className="text-xs text-gray-500">Detalle de pagos por rango de fechas</p></div>
+          </div>
+        </button>
+
+        <button onClick={exportAttendance} disabled={loading} className="glass rounded-2xl p-5 text-left card-hover group">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-brand-600/15 border border-brand-500/20 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg></div>
+            <div><h3 className="text-sm font-bold text-white group-hover:text-brand-400 transition">Asistencia</h3><p className="text-xs text-gray-500">Registro de entradas por fechas</p></div>
+          </div>
+        </button>
+
+        <button onClick={exportMonthlyReport} disabled={loading} className="glass rounded-2xl p-5 text-left card-hover group">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-violet-600/15 border border-violet-500/20 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></div>
+            <div><h3 className="text-sm font-bold text-white group-hover:text-brand-400 transition">Reporte General</h3><p className="text-xs text-gray-500">Resumen: miembros, ingresos, asistencia</p></div>
+          </div>
+        </button>
+      </div>
+
+      {loading && <div className="mt-4 text-center"><div className="inline-flex items-center gap-2 text-sm text-gray-400"><div className="w-4 h-4 border-2 border-white/20 border-t-brand-500 rounded-full animate-spin"></div>Generando reporte...</div></div>}
+    </div>
+  );
+}
+
+// ============================================================
+// ADMIN: INVENTARIO Y PRODUCTOS
+// ============================================================
+
+const PRODUCT_CATEGORIES = [
+  { id: 'suplemento', label: 'Suplementos', icon: '💊' },
+  { id: 'bebida', label: 'Bebidas', icon: '🥤' },
+  { id: 'accesorio', label: 'Accesorios', icon: '🏋️' },
+  { id: 'ropa', label: 'Ropa', icon: '👕' },
+  { id: 'otro', label: 'Otros', icon: '📦' },
+];
+
+function ProductsPage() {
+  const { profile, gym, bcv: bcvData } = useApp();
+  const [productos, setProductos] = useState([]);
+  const [ventas, setVentas] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('inventory'); // inventory | sales | history
+  const [showForm, setShowForm] = useState(false);
+  const [editProduct, setEditProduct] = useState(null);
+  const [showSaleForm, setShowSaleForm] = useState(null); // producto object
+  const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState('all');
+  const [form, setForm] = useState({ nombre: '', categoria: 'suplemento', precio: '', costo: '', stock: '', stock_minimo: '5', descripcion: '' });
+  const [saleForm, setSaleForm] = useState({ cantidad: '1', metodo: 'efectivo', referencia: '', nota: '', member_id: '' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const bcvRate = bcvData?.promedio || 0;
+
+  useEffect(() => { if (gym?.id) loadData(); }, [gym?.id]);
+
+  async function loadData() {
+    setLoading(true);
+    const [pRes, vRes, mRes] = await Promise.all([
+      supabase.from('productos').select('*').eq('gym_id', gym.id).order('nombre'),
+      supabase.from('ventas').select('*, producto:productos(nombre), miembro:profiles(nombre)').eq('gym_id', gym.id).order('fecha', { ascending: false }).limit(100),
+      supabase.from('profiles').select('id, nombre').eq('gym_id', gym.id).eq('role', 'member').order('nombre'),
+    ]);
+    if (pRes.data) setProductos(pRes.data);
+    if (vRes.data) setVentas(vRes.data);
+    if (mRes.data) setMembers(mRes.data);
+    setLoading(false);
+  }
+
+  function openAdd() {
+    setEditProduct(null);
+    setForm({ nombre: '', categoria: 'suplemento', precio: '', costo: '', stock: '', stock_minimo: '5', descripcion: '' });
+    setShowForm(true);
+  }
+
+  function openEdit(p) {
+    setEditProduct(p);
+    setForm({ nombre: p.nombre, categoria: p.categoria, precio: String(p.precio), costo: String(p.costo || ''), stock: String(p.stock), stock_minimo: String(p.stock_minimo), descripcion: p.descripcion || '' });
+    setShowForm(true);
+  }
+
+  async function saveProduct() {
+    if (!form.nombre || !form.precio) return;
+    setSaving(true);
+    const data = {
+      nombre: form.nombre, categoria: form.categoria,
+      precio: parseFloat(form.precio), costo: parseFloat(form.costo) || 0,
+      stock: parseInt(form.stock) || 0, stock_minimo: parseInt(form.stock_minimo) || 5,
+      descripcion: form.descripcion || null, gym_id: gym.id,
+    };
+    if (editProduct) {
+      const { error } = await supabase.from('productos').update(data).eq('id', editProduct.id);
+      if (error) { setMsg('Error: ' + error.message); } else { setMsg('Producto actualizado'); }
+    } else {
+      const { error } = await supabase.from('productos').insert(data);
+      if (error) { setMsg('Error: ' + error.message); } else { setMsg('Producto agregado'); }
+    }
+    setSaving(false); setShowForm(false); loadData();
+    setTimeout(() => setMsg(''), 3000);
+  }
+
+  async function toggleActive(p) {
+    await supabase.from('productos').update({ activo: !p.activo }).eq('id', p.id);
+    loadData();
+  }
+
+  async function sellProduct() {
+    if (!showSaleForm) return;
+    const cant = parseInt(saleForm.cantidad) || 1;
+    if (cant > showSaleForm.stock) { setMsg('Stock insuficiente'); setTimeout(() => setMsg(''), 3000); return; }
+    setSaving(true);
+    const total = cant * showSaleForm.precio;
+    const { error } = await supabase.from('ventas').insert({
+      producto_id: showSaleForm.id, cantidad: cant, precio_unitario: showSaleForm.precio,
+      total, metodo: saleForm.metodo, referencia: saleForm.referencia || null,
+      nota: saleForm.nota || null, member_id: saleForm.member_id || null, gym_id: gym.id,
+    });
+    if (error) { setMsg('Error: ' + error.message); } else { setMsg(`Venta registrada: $${total.toFixed(2)}`); }
+    setSaving(false); setShowSaleForm(null); loadData();
+    setTimeout(() => setMsg(''), 3000);
+  }
+
+  const filtered = productos.filter(p => {
+    if (catFilter !== 'all' && p.categoria !== catFilter) return false;
+    if (search && !p.nombre.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const lowStock = productos.filter(p => p.activo && p.stock <= p.stock_minimo);
+
+  // Today's sales
+  const today = new Date().toISOString().split('T')[0];
+  const todaySales = ventas.filter(v => v.fecha?.startsWith(today));
+  const todayTotal = todaySales.reduce((s, v) => s + Number(v.total), 0);
+
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div></div>;
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      {msg && <div className={`p-3 rounded-xl text-sm font-medium ${msg.startsWith('Error') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>{msg}</div>}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Inventario</h1>
+          <p className="text-sm text-gray-500 mt-1">{productos.filter(p => p.activo).length} productos activos · {lowStock.length} con stock bajo</p>
+        </div>
+        <button onClick={openAdd} className="gradient-orange text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-lg">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          Nuevo Producto
+        </button>
+      </div>
+
+      {/* Low stock alert */}
+      {lowStock.length > 0 && (
+        <div className="glass rounded-2xl p-4 border-l-4 border-amber-500">
+          <p className="text-sm font-semibold text-amber-400 mb-2">⚠️ Stock bajo ({lowStock.length})</p>
+          <div className="flex flex-wrap gap-2">
+            {lowStock.map(p => (
+              <span key={p.id} className="text-xs bg-amber-500/10 text-amber-300 px-2 py-1 rounded-lg">{p.nombre}: {p.stock} uds</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-white/5 rounded-xl p-1">
+        {[{id:'inventory',label:'Inventario'},{id:'sales',label:'Vender'},{id:'history',label:'Historial'}].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition ${tab === t.id ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'}`}>{t.label}</button>
+        ))}
+      </div>
+
+      {/* TAB: Inventory */}
+      {tab === 'inventory' && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..."
+                className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500/50" />
+            </div>
+            <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-xl px-3 text-sm text-gray-300 focus:outline-none focus:border-brand-500/50">
+              <option value="all">Todas</option>
+              {PRODUCT_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map(p => {
+              const cat = PRODUCT_CATEGORIES.find(c => c.id === p.categoria);
+              const isLow = p.stock <= p.stock_minimo;
+              return (
+                <div key={p.id} className={`glass rounded-2xl p-4 card-hover ${!p.activo ? 'opacity-50' : ''}`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{cat?.icon || '📦'}</span>
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">{p.nombre}</h3>
+                        <p className="text-xs text-gray-500">{cat?.label}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                      </button>
+                      <button onClick={() => toggleActive(p)} className={`p-1.5 rounded-lg hover:bg-white/10 transition ${p.activo ? 'text-green-400' : 'text-red-400'}`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={p.activo ? 'M5 13l4 4L19 7' : 'M6 18L18 6M6 6l12 12'} /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-lg font-bold text-white">${Number(p.precio).toFixed(2)}</p>
+                      {bcvRate > 0 && <p className="text-xs text-gray-500">{(Number(p.precio) * bcvRate).toFixed(2)} Bs</p>}
+                    </div>
+                    <div className={`text-right`}>
+                      <p className={`text-sm font-semibold ${isLow ? 'text-amber-400' : 'text-gray-300'}`}>{p.stock} uds</p>
+                      {p.costo > 0 && <p className="text-xs text-gray-500">Costo: ${Number(p.costo).toFixed(2)}</p>}
+                    </div>
+                  </div>
+                  {p.descripcion && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{p.descripcion}</p>}
+                </div>
+              );
+            })}
+          </div>
+          {filtered.length === 0 && <p className="text-center text-gray-500 py-12">No hay productos{search ? ' que coincidan' : ''}</p>}
+        </div>
+      )}
+
+      {/* TAB: Sales (point of sale) */}
+      {tab === 'sales' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="glass rounded-2xl p-4 text-center">
+              <p className="text-xs text-gray-500">Ventas hoy</p>
+              <p className="text-xl font-bold text-white">{todaySales.length}</p>
+            </div>
+            <div className="glass rounded-2xl p-4 text-center">
+              <p className="text-xs text-gray-500">Total hoy</p>
+              <p className="text-xl font-bold text-green-400">${todayTotal.toFixed(2)}</p>
+            </div>
+            {bcvRate > 0 && (
+              <div className="glass rounded-2xl p-4 text-center col-span-2 sm:col-span-1">
+                <p className="text-xs text-gray-500">Total Bs hoy</p>
+                <p className="text-xl font-bold text-blue-400">{(todayTotal * bcvRate).toFixed(2)} Bs</p>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Selecciona un producto para vender</p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {productos.filter(p => p.activo && p.stock > 0).map(p => {
+              const cat = PRODUCT_CATEGORIES.find(c => c.id === p.categoria);
+              return (
+                <button key={p.id} onClick={() => { setShowSaleForm(p); setSaleForm({ cantidad: '1', metodo: 'efectivo', referencia: '', nota: '', member_id: '' }); }}
+                  className="glass rounded-xl p-3 text-left hover:bg-white/5 transition flex items-center gap-3">
+                  <span className="text-2xl">{cat?.icon || '📦'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{p.nombre}</p>
+                    <p className="text-xs text-gray-500">{p.stock} disponibles</p>
+                  </div>
+                  <p className="text-sm font-bold text-brand-400">${Number(p.precio).toFixed(2)}</p>
+                </button>
+              );
+            })}
+          </div>
+          {productos.filter(p => p.activo && p.stock > 0).length === 0 && <p className="text-center text-gray-500 py-12">No hay productos disponibles para venta</p>}
+        </div>
+      )}
+
+      {/* TAB: History */}
+      {tab === 'history' && (
+        <div className="space-y-3">
+          {ventas.length === 0 && <p className="text-center text-gray-500 py-12">No hay ventas registradas</p>}
+          {ventas.map(v => (
+            <div key={v.id} className="glass rounded-xl p-3 flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center text-green-400 text-lg font-bold">$</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white">{v.producto?.nombre || 'Producto'} x{v.cantidad}</p>
+                <p className="text-xs text-gray-500">{v.miembro?.nombre || 'Sin miembro'} · {v.metodo} {v.referencia ? `· ${v.referencia}` : ''}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-green-400">${Number(v.total).toFixed(2)}</p>
+                <p className="text-xs text-gray-500">{new Date(v.fecha).toLocaleDateString('es-VE', { day: '2-digit', month: 'short' })}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal: Add/Edit Product */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)}></div>
+          <div className="relative bg-[#1a1a24] border border-white/10 rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto animate-scaleIn">
+            <h3 className="text-lg font-bold text-white mb-4">{editProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 font-medium">Nombre *</label>
+                <input value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})}
+                  className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-medium">Categoría</label>
+                <select value={form.categoria} onChange={e => setForm({...form, categoria: e.target.value})}
+                  className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-300 focus:outline-none focus:border-brand-500/50">
+                  {PRODUCT_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.label}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 font-medium">Precio venta ($) *</label>
+                  <input type="number" step="0.01" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})}
+                    className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 font-medium">Costo ($)</label>
+                  <input type="number" step="0.01" value={form.costo} onChange={e => setForm({...form, costo: e.target.value})}
+                    className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 font-medium">Stock actual</label>
+                  <input type="number" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})}
+                    className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 font-medium">Stock mínimo</label>
+                  <input type="number" value={form.stock_minimo} onChange={e => setForm({...form, stock_minimo: e.target.value})}
+                    className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-medium">Descripción</label>
+                <textarea value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} rows={2}
+                  className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50 resize-none" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowForm(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-400 border border-white/10 hover:bg-white/5 transition">Cancelar</button>
+              <button onClick={saveProduct} disabled={saving || !form.nombre || !form.precio}
+                className="flex-1 gradient-orange text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition">{saving ? 'Guardando...' : editProduct ? 'Actualizar' : 'Agregar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Sell Product */}
+      {showSaleForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSaleForm(null)}></div>
+          <div className="relative bg-[#1a1a24] border border-white/10 rounded-2xl p-6 w-full max-w-md animate-scaleIn">
+            <h3 className="text-lg font-bold text-white mb-1">Registrar Venta</h3>
+            <p className="text-sm text-gray-500 mb-4">{showSaleForm.nombre} — ${Number(showSaleForm.precio).toFixed(2)} c/u</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 font-medium">Cantidad (max: {showSaleForm.stock})</label>
+                <input type="number" min="1" max={showSaleForm.stock} value={saleForm.cantidad} onChange={e => setSaleForm({...saleForm, cantidad: e.target.value})}
+                  className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-medium">Miembro (opcional)</label>
+                <select value={saleForm.member_id} onChange={e => setSaleForm({...saleForm, member_id: e.target.value})}
+                  className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-300 focus:outline-none focus:border-brand-500/50">
+                  <option value="">— Venta sin miembro —</option>
+                  {members.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-medium">Método de pago</label>
+                <select value={saleForm.metodo} onChange={e => setSaleForm({...saleForm, metodo: e.target.value})}
+                  className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-300 focus:outline-none focus:border-brand-500/50">
+                  <option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option>
+                  <option value="pago_movil">Pago Móvil</option><option value="zelle">Zelle</option><option value="otro">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-medium">Referencia</label>
+                <input value={saleForm.referencia} onChange={e => setSaleForm({...saleForm, referencia: e.target.value})}
+                  className="w-full mt-1 px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-brand-500/50" placeholder="Nro. referencia (opcional)" />
+              </div>
+              <div className="glass rounded-xl p-3 text-center">
+                <p className="text-xs text-gray-500">Total</p>
+                <p className="text-2xl font-bold text-brand-400">${((parseInt(saleForm.cantidad) || 0) * showSaleForm.precio).toFixed(2)}</p>
+                {bcvRate > 0 && <p className="text-sm text-gray-500">{((parseInt(saleForm.cantidad) || 0) * showSaleForm.precio * bcvRate).toFixed(2)} Bs</p>}
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={() => setShowSaleForm(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-gray-400 border border-white/10 hover:bg-white/5 transition">Cancelar</button>
+              <button onClick={sellProduct} disabled={saving || !(parseInt(saleForm.cantidad) > 0)}
+                className="flex-1 gradient-orange text-white py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition">{saving ? 'Procesando...' : 'Confirmar Venta'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // ADMIN: CONFIGURACIÓN DEL GYM
 // ============================================================
 
@@ -2614,6 +3316,14 @@ export default function App() {
   const [view, setView] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Ctrl+K / Cmd+K to open global search
+  useEffect(() => {
+    function handleKey(e) { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setSearchOpen(true); } if (e.key === 'Escape') setSearchOpen(false); }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
   const bcv = useBcvRate();
 
   const loadGym = useCallback(async (gymId) => {
@@ -2680,6 +3390,8 @@ export default function App() {
       case 'my-attendance': return <MyAttendancePage />;
       case 'available-plans': return <AvailablePlansPage />;
       case 'my-profile': return <MemberSettingsPage />;
+      case 'reports': return <ReportsPage />;
+      case 'products': return <ProductsPage />;
       case 'settings': return <SettingsPage />;
       default: return <AdminDashboard />;
     }
@@ -2688,19 +3400,24 @@ export default function App() {
   return (
     <AppContext.Provider value={{ profile, session, gym, reloadGym, reloadProfile, bcv }}>
       <div className="flex min-h-screen bg-[#0f0f13]">
-        <div className="hidden lg:block"><Sidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} /></div>
+        <div className="hidden lg:block"><Sidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} onSearch={() => setSearchOpen(true)} /></div>
         <MobileSidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
         <MobileMoreMenu open={moreMenuOpen} onClose={() => setMoreMenuOpen(false)} setView={setView} profile={profile} onLogout={handleLogout} />
         <div className="flex-1 min-w-0">
-          <header className="lg:hidden bg-[#12121a]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-center sticky top-0 z-40">
+          <header className="lg:hidden bg-[#12121a]/80 backdrop-blur-xl border-b border-white/5 px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+            <div className="w-8"></div>
             <div className="flex items-center gap-2">
               <GymLogo gym={gym} size="sm" />
               <span className="font-bold text-white text-sm truncate max-w-[180px]">{gym?.nombre || 'GymFlow'}</span>
             </div>
+            <button onClick={() => setSearchOpen(true)} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-white transition rounded-lg hover:bg-white/5">
+              <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            </button>
           </header>
           <main className="p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8 max-w-7xl">{renderView()}</main>
         </div>
         <BottomNav currentView={view} setView={setView} profile={profile} onLogout={handleLogout} onMore={() => setMoreMenuOpen(true)} />
+        <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={setView} />
       </div>
     </AppContext.Provider>
   );
